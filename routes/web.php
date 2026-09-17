@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\RealtimeController;
+use App\Http\Controllers\VercelCronController;
 use App\Livewire\Customer\ModulePage as CustomerModulePage;
 use App\Livewire\SuperAdmin\Dashboard as SuperAdminDashboard;
 use App\Livewire\SuperAdmin\ModulePage as SuperAdminModulePage;
@@ -10,6 +11,8 @@ use App\Livewire\Technician\ModulePage as TechnicianModulePage;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', LandingPageController::class)->name('home');
+Route::get('internal/cron/expire-walk-ins', VercelCronController::class)
+    ->name('internal.cron.expire-walk-ins');
 
 Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
 Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');

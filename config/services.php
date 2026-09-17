@@ -41,4 +41,8 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/google/callback'),
     ],
 
+    'vercel' => [
+        'cron_secret' => env('CRON_SECRET'),
+    ],
+
 ];
