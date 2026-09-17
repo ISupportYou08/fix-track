@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "echo \"Using committed Vite assets\"",
+  "buildCommand": "node prepare-vercel-assets.mjs",
+  "outputDirectory": "dist",
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0",
@@ -11,15 +12,7 @@
   },
   "routes": [
     {
-      "src": "/build/(.*)",
-      "headers": {
-        "cache-control": "public, max-age=31536000, immutable"
-      },
-      "dest": "/public/build/$1"
-    },
-    {
-      "src": "/(favicon\\.ico|favicon\\.svg|apple-touch-icon\\.png|fixtrack-logo\\.png|robots\\.txt)",
-      "dest": "/public/$1"
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
