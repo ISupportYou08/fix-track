@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\ServiceCatalog;
+use App\Models\TechnicianVerification;
 use App\Models\User;
 use App\Models\WalkInEntry;
 use Illuminate\View\View;
@@ -16,7 +17,16 @@ class LandingPageController extends Controller
     public function __invoke(): View
     {
         $services = ServiceCatalog::activeCatalog()->take(6);
-        $activeWalkIns = WalkInEntry::query()->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->count();
+        $shopIds = TechnicianVerification::query()
+            ->where('status', 'approved')
+            ->whereIn('service_type', ['walkin', 'both'])
+            ->whereHas('technician', fn ($query) => $query->where('account_status', 'active'))
+            ->pluck('user_id');
+        $walkInCapacity = max(1, $shopIds->count()) * WalkInEntry::MAX_ACTIVE;
+        $activeWalkIns = WalkInEntry::query()
+            ->whereIn('status', WalkInEntry::ACTIVE_STATUSES)
+            ->when($shopIds->isNotEmpty(), fn ($query) => $query->whereIn('technician_id', $shopIds))
+            ->count();
 
         return view('welcome', [
             'services' => $services,
@@ -26,8 +36,8 @@ class LandingPageController extends Controller
                 ['label' => 'Active technicians', 'value' => User::query()->where('role', 'technician')->where('account_status', 'active')->count()],
                 ['label' => 'Customers served', 'value' => User::query()->where('role', 'customer')->count()],
             ],
-            'walkInCapacity' => WalkInEntry::MAX_ACTIVE,
-            'walkInAvailableSlots' => max(0, WalkInEntry::MAX_ACTIVE - $activeWalkIns),
+            'walkInCapacity' => $walkInCapacity,
+            'walkInAvailableSlots' => max(0, $walkInCapacity - $activeWalkIns),
         ]);
     }
 }

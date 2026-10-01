@@ -11,7 +11,7 @@ test('authenticated workspaces expose mobile bottom navigation and keep the side
     foreach ([
         ['customer', 'customer.module', ['home', 'activity', 'messages', 'account']],
         ['technician', 'technician.module', ['dashboard', 'job-requests', 'my-jobs', 'dispatch-routes', 'verification-profile']],
-        ['superadmin', 'admin.dashboard', ['dashboard', 'service-bookings', 'dispatch-monitor', 'users-roles']],
+        ['superadmin', 'admin.dashboard', ['dashboard', 'users-roles', 'technician-verification', 'service-bookings']],
     ] as [$role, $routeName, $primaryItems]) {
         $user = User::factory()->create(['role' => $role]);
 

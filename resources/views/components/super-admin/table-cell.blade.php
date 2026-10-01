@@ -17,8 +17,8 @@
             default => 'zinc',
         },
         'role' => match ($normalizedValue) {
-            'superadmin' => 'violet',
-            'admin' => 'sky',
+            'superadmin', 'administrator' => 'violet',
+            'staff' => 'sky',
             'dispatcher' => 'cyan',
             'support' => 'teal',
             'finance' => 'emerald',

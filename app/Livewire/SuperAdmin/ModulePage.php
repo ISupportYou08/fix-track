@@ -2,6 +2,7 @@
 
 namespace App\Livewire\SuperAdmin;
 
+use App\Concerns\PasswordValidationRules;
 use App\Models\AuditLog;
 use App\Models\Booking;
 use App\Models\Payment;
@@ -13,6 +14,9 @@ use App\Models\SupportTicket;
 use App\Models\TechnicianVerification;
 use App\Models\User;
 use App\Models\WalkInEntry;
+use App\Models\WalkInPayment;
+use App\Notifications\TechnicianAccountStatusNotification;
+use App\Notifications\TechnicianApplicationDecisionNotification;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -20,6 +24,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
@@ -29,15 +34,80 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 #[Layout('layouts.app')]
-#[Title('Super Admin Module')]
+#[Title('Operations Module')]
 class ModulePage extends Component
 {
+    use PasswordValidationRules, WithPagination;
+
+    /** @var array<int, string> */
+    private const STAFF_MODULES = [
+        'technician-verification',
+        'service-bookings',
+        'dispatch-monitor',
+        'walk-in-queue',
+        'payments-revenue',
+        'ratings-reviews',
+        'reports-analytics',
+        'support-disputes',
+        'service-catalog',
+    ];
+
+    /** @var array<int, string> */
+    private const ADMINISTRATOR_CONFIRMATION_ACTIONS = [
+        'run-scheduler',
+        'clear-cache',
+        'retry-failed-jobs',
+        'initialize-settings',
+        'make-staff',
+        'make-technician',
+        'make-customer',
+        'suspend-user',
+        'activate-user',
+        'revoke-user-sessions',
+        'approve-verification',
+        'reject-verification',
+        'suspend-technician',
+        'ban-technician',
+        'restore-technician',
+    ];
+
     public string $moduleSlug;
+
+    public string $verificationSearch = '';
+
+    public string $verificationFilter = 'pending';
+
+    public string $userSearch = '';
+
+    public string $userRoleFilter = 'all';
+
+    public string $userStatusFilter = 'all';
+
+    public bool $showStaffEditor = false;
+
+    public string $staffName = '';
+
+    public string $staffEmail = '';
+
+    public string $staffPhone = '';
+
+    public string $staffPassword = '';
+
+    public string $staffPasswordConfirmation = '';
+
+    #[Locked]
+    public ?int $focusedBookingId = null;
+
+    public bool $showVerificationDetails = false;
+
+    #[Locked]
+    public ?int $selectedVerificationId = null;
 
     public bool $showConfirmation = false;
 
@@ -50,6 +120,8 @@ class ModulePage extends Component
     public string $confirmationVariant = 'danger';
 
     public string $confirmationReason = '';
+
+    public string $suspensionDays = '';
 
     public bool $confirmationRequiresReason = false;
 
@@ -81,6 +153,13 @@ class ModulePage extends Component
     public string $supportPriority = 'normal';
 
     public string $supportMessage = '';
+
+    public bool $showWalkInCheckout = false;
+
+    #[Locked]
+    public ?int $checkoutPaymentId = null;
+
+    public string $checkoutAmount = '';
 
     public bool $showCatalogEditor = false;
 
@@ -124,7 +203,7 @@ class ModulePage extends Component
                 'icon' => 'users',
             ],
             'technician-verification' => [
-                'label' => 'Technician Verification',
+                'label' => 'Technician',
                 'description' => 'Review technician verification submissions.',
                 'icon' => 'identification',
             ],
@@ -183,10 +262,70 @@ class ModulePage extends Component
 
     public function mount(string $module): void
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        $user = auth()->user();
+
+        abort_unless($user?->canAccessOperationsWorkspace(), 403);
         abort_unless(array_key_exists($module, self::modules()), 404);
+        abort_if($user->isStaff() && ! in_array($module, self::STAFF_MODULES, true), 403);
 
         $this->moduleSlug = $module;
+        if ($module === 'technician-verification' && request()->query('filter') === 'verified') {
+            $this->verificationFilter = 'verified';
+        }
+
+        if ($module === 'service-bookings') {
+            $bookingId = request()->integer('booking');
+            $this->focusedBookingId = $bookingId > 0 ? $bookingId : null;
+        }
+    }
+
+    public function updatedVerificationSearch(): void
+    {
+        $this->resetPage('verificationPage');
+    }
+
+    public function updatedUserSearch(): void
+    {
+        $this->resetPage('usersPage');
+    }
+
+    public function updatedUserRoleFilter(): void
+    {
+        $this->validateValue($this->userRoleFilter, ['all', 'superadmin', 'staff', 'technician', 'customer']);
+        $this->resetPage('usersPage');
+    }
+
+    public function updatedUserStatusFilter(): void
+    {
+        $this->validateValue($this->userStatusFilter, ['all', 'active', 'suspended', User::ACCOUNT_BANNED]);
+        $this->resetPage('usersPage');
+    }
+
+    public function setVerificationFilter(string $filter): void
+    {
+        $this->authorizeSuperAdmin();
+        abort_unless($this->moduleSlug === 'technician-verification', 404);
+        abort_unless(in_array($filter, ['pending', 'verified'], true), 422);
+
+        $this->verificationFilter = $filter;
+        $this->closeVerificationDetails();
+        $this->resetPage('verificationPage');
+    }
+
+    public function openVerificationDetails(int $verificationId): void
+    {
+        $this->authorizeSuperAdmin();
+        abort_unless($this->moduleSlug === 'technician-verification', 404);
+        TechnicianVerification::query()->findOrFail($verificationId);
+
+        $this->selectedVerificationId = $verificationId;
+        $this->showVerificationDetails = true;
+    }
+
+    public function closeVerificationDetails(): void
+    {
+        $this->showVerificationDetails = false;
+        $this->selectedVerificationId = null;
     }
 
     public function render(): View
@@ -198,6 +337,9 @@ class ModulePage extends Component
             'content' => $content,
             'moduleState' => $this->moduleState(),
             'moduleConnections' => $this->moduleConnections(),
+            'editingSupportTicket' => $this->editingSupportTicketId !== null
+                ? SupportTicket::query()->with('messages.sender:id,name')->find($this->editingSupportTicketId)
+                : null,
         ]);
     }
 
@@ -225,18 +367,18 @@ class ModulePage extends Component
     /** @return array<int, array{label: string, icon: string, href: string}> */
     private function moduleConnections(): array
     {
-        $link = static fn (string $label, string $icon, string $module): array => [
+        $link = fn (string $label, string $icon, string $module): array => [
             'label' => $label,
             'icon' => $icon,
-            'href' => route('admin.module', ['module' => $module]),
+            'href' => route($this->operationsRouteName('module'), ['module' => $module]),
         ];
 
-        return match ($this->moduleSlug) {
+        $connections = match ($this->moduleSlug) {
             'system-health' => [$link('Platform settings', 'cog-6-tooth', 'platform-settings'), $link('Audit logs', 'document-text', 'audit-logs')],
-            'users-roles' => [$link('Technician verification', 'identification', 'technician-verification'), $link('Audit logs', 'document-text', 'audit-logs')],
+            'users-roles' => [$link('Technician', 'identification', 'technician-verification'), $link('Audit logs', 'document-text', 'audit-logs')],
             'technician-verification' => [$link('Users & roles', 'users', 'users-roles'), $link('Dispatch monitor', 'map', 'dispatch-monitor')],
             'service-bookings' => [$link('Dispatch monitor', 'map', 'dispatch-monitor'), $link('Payments & revenue', 'banknotes', 'payments-revenue'), $link('Reports & analytics', 'chart-bar', 'reports-analytics')],
-            'dispatch-monitor' => [$link('Service bookings', 'clipboard-document-list', 'service-bookings'), $link('Technician verification', 'identification', 'technician-verification')],
+            'dispatch-monitor' => [$link('Service bookings', 'clipboard-document-list', 'service-bookings'), $link('Technician', 'identification', 'technician-verification')],
             'walk-in-queue' => [$link('Service bookings', 'clipboard-document-list', 'service-bookings'), $link('Reports & analytics', 'chart-bar', 'reports-analytics')],
             'payments-revenue' => [$link('Service bookings', 'clipboard-document-list', 'service-bookings'), $link('Reports & analytics', 'chart-bar', 'reports-analytics')],
             'ratings-reviews' => [$link('Service bookings', 'clipboard-document-list', 'service-bookings'), $link('Reports & analytics', 'chart-bar', 'reports-analytics')],
@@ -247,13 +389,90 @@ class ModulePage extends Component
             'platform-settings' => [$link('System health', 'server-stack', 'system-health'), $link('Service bookings', 'clipboard-document-list', 'service-bookings')],
             default => [],
         };
+
+        if (auth()->user()?->isSuperAdmin()) {
+            return $connections;
+        }
+
+        return array_values(array_filter(
+            $connections,
+            fn (array $connection): bool => collect(self::STAFF_MODULES)->contains(
+                fn (string $module): bool => str_contains($connection['href'], '/'.$module)
+            ),
+        ));
+    }
+
+    public function openStaffEditor(): void
+    {
+        $this->authorizeAdministrator();
+        abort_unless($this->moduleSlug === 'users-roles', 404);
+
+        $this->resetValidation();
+        $this->showStaffEditor = true;
+    }
+
+    public function createStaff(): void
+    {
+        $this->authorizeAdministrator();
+        abort_unless($this->moduleSlug === 'users-roles', 404);
+
+        $this->staffName = trim($this->staffName);
+        $this->staffEmail = Str::lower(trim($this->staffEmail));
+        $this->staffPhone = trim($this->staffPhone);
+        $passwordRules = array_values(array_filter(
+            $this->passwordRules(),
+            fn (mixed $rule): bool => $rule !== 'confirmed',
+        ));
+        $passwordRules[] = 'same:staffPasswordConfirmation';
+
+        $validated = $this->validate([
+            'staffName' => ['required', 'string', 'min:2', 'max:255'],
+            'staffEmail' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class, 'email')],
+            'staffPhone' => ['nullable', 'string', 'regex:/^\+[1-9][0-9]{7,14}$/'],
+            'staffPassword' => $passwordRules,
+            'staffPasswordConfirmation' => ['required', 'string'],
+        ]);
+
+        $staff = User::query()->create([
+            'name' => $validated['staffName'],
+            'email' => $validated['staffEmail'],
+            'phone' => $validated['staffPhone'] !== '' ? $validated['staffPhone'] : null,
+            'password' => $validated['staffPassword'],
+            'role' => 'staff',
+            'account_status' => 'active',
+        ]);
+        $staff->forceFill(['email_verified_at' => now()])->save();
+
+        $this->recordAudit('staff.created', 'user', $staff->id, ['email' => $staff->email]);
+        $this->cancelStaffEditor();
+        $this->resetPage('usersPage');
+        $this->flashStatus('Staff account created.');
+    }
+
+    public function cancelStaffEditor(): void
+    {
+        $this->showStaffEditor = false;
+        $this->staffName = '';
+        $this->staffEmail = '';
+        $this->staffPhone = '';
+        $this->staffPassword = '';
+        $this->staffPasswordConfirmation = '';
+        $this->resetValidation();
     }
 
     public function requestConfirmation(string $action, int $id = 0): void
     {
-        $this->authorizeSuperAdmin();
+        if (in_array($action, self::ADMINISTRATOR_CONFIRMATION_ACTIONS, true)) {
+            $this->authorizeAdministrator();
+        } else {
+            $this->authorizeSuperAdmin();
+        }
 
         $confirmation = $this->confirmationDefinition($action, $id);
+
+        if ($this->moduleSlug === 'technician-verification') {
+            $this->closeVerificationDetails();
+        }
 
         $this->pendingConfirmation = [
             'operation' => $confirmation['operation'],
@@ -265,6 +484,7 @@ class ModulePage extends Component
         $this->confirmationActionLabel = $confirmation['label'];
         $this->confirmationVariant = $confirmation['variant'];
         $this->confirmationReason = '';
+        $this->suspensionDays = '';
         $this->confirmationRequiresReason = (bool) ($confirmation['requiresReason'] ?? false);
         $this->showConfirmation = true;
     }
@@ -280,9 +500,17 @@ class ModulePage extends Component
         }
 
         if ($pending['requiresReason']) {
-            Validator::make(['reason' => $this->confirmationReason], [
-                'reason' => ['required', 'string', 'max:1000'],
+            Validator::make(['reason' => trim($this->confirmationReason)], [
+                'reason' => ['required', 'string', 'min:10', 'max:1000'],
             ])->validate();
+        }
+
+        $suspensionDays = null;
+        if ($pending['operation'] === 'updateTechnicianAccountStatus' && ($pending['parameters'][1] ?? null) === 'suspended') {
+            $validated = Validator::make(['suspension_days' => $this->suspensionDays], [
+                'suspension_days' => ['required', 'integer', 'between:1,365'],
+            ])->validate();
+            $suspensionDays = (int) $validated['suspension_days'];
         }
 
         $confirmationReason = trim($this->confirmationReason);
@@ -290,7 +518,7 @@ class ModulePage extends Component
         $this->cancelConfirmation();
 
         try {
-            $this->dispatchConfirmedAction($pending, $confirmationReason);
+            $this->dispatchConfirmedAction($pending, $confirmationReason, $suspensionDays);
         } catch (Throwable $exception) {
             $this->notifyActionFailure($exception);
         }
@@ -305,6 +533,7 @@ class ModulePage extends Component
         $this->confirmationActionLabel = 'Confirm';
         $this->confirmationVariant = 'danger';
         $this->confirmationReason = '';
+        $this->suspensionDays = '';
         $this->confirmationRequiresReason = false;
     }
 
@@ -341,13 +570,13 @@ class ModulePage extends Component
                 'operation' => 'runSystemAction',
                 'parameters' => ['retry-failed-jobs'],
             ],
-            'make-admin' => [
-                'title' => 'Make this user an Admin?',
+            'make-staff' => [
+                'title' => 'Make this user a Staff member?',
                 'description' => 'This changes the user\'s access role and permissions.',
-                'label' => 'Make admin',
+                'label' => 'Make staff',
                 'variant' => 'primary',
                 'operation' => 'updateUserRole',
-                'parameters' => [$targetId ?? $targetRequired(), 'admin'],
+                'parameters' => [$targetId ?? $targetRequired(), 'staff'],
             ],
             'make-technician' => [
                 'title' => 'Make this user a Technician?',
@@ -372,6 +601,14 @@ class ModulePage extends Component
                 'variant' => 'danger',
                 'operation' => 'updateUserStatus',
                 'parameters' => [$targetId ?? $targetRequired(), 'suspended'],
+            ],
+            'activate-user' => [
+                'title' => 'Reactivate this account?',
+                'description' => 'The user will regain access to their assigned workspace.',
+                'label' => 'Reactivate account',
+                'variant' => 'primary',
+                'operation' => 'updateUserStatus',
+                'parameters' => [$targetId ?? $targetRequired(), 'active'],
             ],
             'revoke-user-sessions' => [
                 'title' => 'Revoke all sessions?',
@@ -407,13 +644,31 @@ class ModulePage extends Component
                 'parameters' => [$targetId ?? $targetRequired(), 'rejected'],
                 'requiresReason' => true,
             ],
-            'suspend-verification' => [
-                'title' => 'Suspend this technician verification?',
-                'description' => 'The technician account will be suspended and the decision reason will be recorded.',
-                'label' => 'Suspend verification',
+            'suspend-technician' => [
+                'title' => 'Suspend this technician account?',
+                'description' => 'Choose a number of full days. Access returns automatically when that period ends. Assigned jobs return to matching; jobs already underway need manual follow-up.',
+                'label' => 'Suspend account',
                 'variant' => 'danger',
-                'operation' => 'updateVerificationStatus',
+                'operation' => 'updateTechnicianAccountStatus',
                 'parameters' => [$targetId ?? $targetRequired(), 'suspended'],
+                'requiresReason' => true,
+            ],
+            'ban-technician' => [
+                'title' => 'Ban this technician account?',
+                'description' => 'Access will be blocked and assigned jobs will return to matching. Jobs already underway need manual follow-up. The technician will receive your message.',
+                'label' => 'Ban account',
+                'variant' => 'danger',
+                'operation' => 'updateTechnicianAccountStatus',
+                'parameters' => [$targetId ?? $targetRequired(), User::ACCOUNT_BANNED],
+                'requiresReason' => true,
+            ],
+            'restore-technician' => [
+                'title' => 'Restore this technician account?',
+                'description' => 'The technician will regain account access. Availability resets to offline until their next sign in.',
+                'label' => 'Restore account',
+                'variant' => 'primary',
+                'operation' => 'updateTechnicianAccountStatus',
+                'parameters' => [$targetId ?? $targetRequired(), 'active'],
                 'requiresReason' => true,
             ],
             'initialize-settings' => [
@@ -494,7 +749,7 @@ class ModulePage extends Component
     }
 
     /** @param array{operation: string, parameters: array<int, mixed>, requiresReason: bool} $pending */
-    private function dispatchConfirmedAction(array $pending, string $confirmationReason = ''): void
+    private function dispatchConfirmedAction(array $pending, string $confirmationReason = '', ?int $suspensionDays = null): void
     {
         $parameters = $pending['parameters'];
 
@@ -504,6 +759,7 @@ class ModulePage extends Component
             'updateUserStatus' => $this->updateUserStatus((int) $parameters[0], (string) $parameters[1]),
             'revokeUserSessions' => $this->revokeUserSessions((int) $parameters[0]),
             'updateVerificationStatus' => $this->updateVerificationStatus((int) $parameters[0], (string) $parameters[1], $confirmationReason),
+            'updateTechnicianAccountStatus' => $this->updateTechnicianAccountStatus((int) $parameters[0], (string) $parameters[1], $confirmationReason, $suspensionDays),
             'updateBookingStatus' => $this->updateBookingStatus(
                 (int) $parameters[0],
                 (string) $parameters[1],
@@ -533,8 +789,9 @@ class ModulePage extends Component
 
     public function updateUserRole(int $userId, string $role): void
     {
-        $this->authorizeSuperAdmin();
-        $this->validateValue($role, ['superadmin', 'admin', 'technician', 'customer']);
+        $this->authorizeAdministrator();
+        $this->validateValue($role, ['superadmin', 'staff', 'technician', 'customer']);
+        abort_if(auth()->id() === $userId, 422, 'You cannot change your own administrator role.');
 
         DB::transaction(function () use ($userId, $role): void {
             $user = User::query()->lockForUpdate()->findOrFail($userId);
@@ -556,12 +813,18 @@ class ModulePage extends Component
 
     public function updateUserStatus(int $userId, string $status): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
         $this->validateValue($status, ['active', 'suspended']);
         abort_unless($this->columnExists('users', 'account_status'), 422, 'User account status is not available yet.');
         abort_if(auth()->id() === $userId && $status === 'suspended', 422, 'You cannot suspend your own account.');
 
         $user = User::query()->findOrFail($userId);
+        abort_if(
+            $user->isTechnician()
+            && TechnicianVerification::query()->where('user_id', $userId)->exists(),
+            422,
+            'Manage technician account access from the Technician page.',
+        );
         $user->update(['account_status' => $status]);
         $this->recordAudit('user.updated', 'user', $userId, ['account_status' => $status]);
         $this->flashStatus('User account status updated.');
@@ -569,7 +832,8 @@ class ModulePage extends Component
 
     public function revokeUserSessions(int $userId): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
+        abort_if(auth()->id() === $userId, 422, 'You cannot revoke your own active sessions here.');
         User::query()->findOrFail($userId);
         $count = Schema::hasTable('sessions') ? DB::table('sessions')->where('user_id', $userId)->delete() : 0;
         $this->recordAudit('user.sessions_revoked', 'user', $userId, ['sessions' => $count]);
@@ -578,29 +842,163 @@ class ModulePage extends Component
 
     public function updateVerificationStatus(int $verificationId, string $status, string $reason = ''): void
     {
-        $this->authorizeSuperAdmin();
-        $this->validateValue($status, ['under_review', 'information_requested', 'approved', 'rejected', 'suspended']);
+        if (in_array($status, ['approved', 'rejected'], true)) {
+            $this->authorizeAdministrator();
+        } else {
+            $this->authorizeSuperAdmin();
+        }
+        $this->validateValue($status, ['under_review', 'information_requested', 'approved', 'rejected']);
         abort_unless($this->tableExists('technician_verifications'), 422, 'Technician verification is not available yet.');
-        abort_if(in_array($status, ['information_requested', 'rejected', 'suspended'], true) && trim($reason) === '', 422, 'A decision reason is required.');
+        $reason = trim($reason);
 
-        $verification = TechnicianVerification::query()->findOrFail($verificationId);
-        $data = [
-            'status' => $status,
-            'reviewer_id' => auth()->id(),
-            'reviewed_at' => now(),
-            'decision_reason' => $reason !== '' ? $reason : null,
-            'updated_at' => now(),
-        ];
-        $verification->update($data);
+        if (in_array($status, ['information_requested', 'rejected'], true)) {
+            Validator::make(['reason' => $reason], [
+                'reason' => ['required', 'string', 'min:10', 'max:1000'],
+            ])->validate();
+        }
 
-        if ($this->columnExists('users', 'account_status') && in_array($status, ['approved', 'suspended'], true)) {
-            User::query()->findOrFail($verification->user_id)->update([
-                'account_status' => $status === 'approved' ? 'active' : 'suspended',
-            ]);
+        $data = [];
+        $verification = DB::transaction(function () use ($verificationId, $status, $reason, &$data): TechnicianVerification {
+            $verification = TechnicianVerification::query()->lockForUpdate()->findOrFail($verificationId);
+            abort_if($verification->status === 'approved', 422, 'An approved technician cannot be returned to application review.');
+
+            if ($status === 'approved') {
+                $technician = User::query()->lockForUpdate()->findOrFail($verification->user_id);
+                abort_unless($technician->email_verified_at !== null, 422, 'Technician email must be verified before approval.');
+            }
+
+            $data = [
+                'status' => $status,
+                'reviewer_id' => auth()->id(),
+                'reviewed_at' => now(),
+                'decision_reason' => $reason !== '' ? $reason : null,
+                'updated_at' => now(),
+            ];
+            $verification->update($data);
+
+            if ($status === 'approved') {
+                $verification->documents()->whereNotNull('file_path')->update(['status' => 'verified']);
+            }
+
+            if ($this->columnExists('users', 'account_status')) {
+                $accountStatus = match ($status) {
+                    'approved' => 'active',
+                    'rejected', 'information_requested' => User::ACCOUNT_REJECTED,
+                    default => User::ACCOUNT_REVIEW_PENDING,
+                };
+
+                User::query()->findOrFail($verification->user_id)->update(['account_status' => $accountStatus]);
+            }
+
+            return $verification->fresh(['technician']);
+        });
+
+        if (in_array($status, ['approved', 'rejected', 'information_requested'], true)) {
+            try {
+                $verification->technician?->notify(new TechnicianApplicationDecisionNotification($verification));
+            } catch (Throwable $exception) {
+                report($exception);
+            }
         }
 
         $this->recordAudit('technician.verification_updated', 'technician_verification', $verificationId, $data);
         $this->flashStatus('Technician verification decision saved.');
+    }
+
+    private function updateTechnicianAccountStatus(int $verificationId, string $status, string $reason, ?int $suspensionDays = null): void
+    {
+        $this->authorizeAdministrator();
+        $this->validateValue($status, ['active', 'suspended', User::ACCOUNT_BANNED]);
+        $reason = trim($reason);
+        Validator::make(['reason' => $reason], [
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ])->validate();
+
+        if ($status === 'suspended') {
+            $validated = Validator::make(['suspension_days' => $suspensionDays], [
+                'suspension_days' => ['required', 'integer', 'between:1,365'],
+            ])->validate();
+            $suspensionDays = (int) $validated['suspension_days'];
+        }
+
+        [$technician, $requeuedCount, $suspendedUntil] = DB::transaction(function () use ($verificationId, $status, $reason, $suspensionDays): array {
+            $verification = TechnicianVerification::query()->lockForUpdate()->findOrFail($verificationId);
+            abort_unless($verification->status === 'approved', 422, 'Only approved technicians can receive account actions.');
+
+            $assignedBookings = collect();
+            if ($status !== 'active' && $this->columnExists('bookings', 'assigned_technician_id')) {
+                $assignedBookings = Booking::query()
+                    ->where('assigned_technician_id', $verification->user_id)
+                    ->where('status', 'assigned')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+            }
+
+            $technician = User::query()->lockForUpdate()->findOrFail($verification->user_id);
+            abort_unless($technician->isTechnician(), 422, 'The selected account is not a technician.');
+
+            $previousStatus = (string) $technician->account_status;
+            abort_if($previousStatus === $status, 422, 'The technician already has this account status.');
+            abort_unless(
+                in_array($previousStatus, ['active', 'suspended', User::ACCOUNT_BANNED], true),
+                422,
+                'This technician account cannot be changed from its current status.',
+            );
+            abort_unless($status !== 'suspended' || $previousStatus === 'active', 422, 'Only active technicians can be suspended.');
+
+            $suspendedUntil = $status === 'suspended' ? now()->addDays($suspensionDays) : null;
+            $accountChanges = ['account_status' => $status, 'suspended_until' => $suspendedUntil];
+            if ($this->columnExists('users', 'availability_status')) {
+                $accountChanges['availability_status'] = 'offline';
+            }
+            $technician->update($accountChanges);
+
+            if ($status !== 'active') {
+                $technician->setRememberToken(Str::random(60));
+                $technician->save();
+
+                if ($this->tableExists('sessions')) {
+                    DB::table('sessions')->where('user_id', $technician->id)->delete();
+                }
+            }
+
+            $requeuedCount = 0;
+            foreach ($assignedBookings as $booking) {
+                $booking->update(['assigned_technician_id' => null]);
+                $booking->transitionTo('matching', auth()->user(), 'Technician account access restricted by staff.', [
+                    'source' => 'technician_account_action',
+                ]);
+                $requeuedCount++;
+            }
+
+            $this->recordAudit('technician.account_status_updated', 'user', $technician->id, [
+                'verification_id' => $verification->id,
+                'previous_status' => $previousStatus,
+                'account_status' => $status,
+                'reason' => $reason,
+                'suspension_days' => $suspensionDays,
+                'suspended_until' => $suspendedUntil?->toIso8601String(),
+                'requeued_bookings' => $requeuedCount,
+            ]);
+
+            return [$technician, $requeuedCount, $suspendedUntil];
+        });
+
+        try {
+            $technician->notify(new TechnicianAccountStatusNotification($status, $reason, $suspendedUntil));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        $label = match ($status) {
+            'suspended' => 'suspended',
+            User::ACCOUNT_BANNED => 'banned',
+            default => 'restored',
+        };
+        $suffix = $status === 'suspended' ? " For {$suspensionDays} day(s)." : '';
+        $suffix .= $requeuedCount > 0 ? " {$requeuedCount} assigned job(s) returned to matching." : '';
+        $this->flashStatus("Technician account {$label}.{$suffix}");
     }
 
     public function updateBookingStatus(int $bookingId, string $status, string $reason = ''): void
@@ -699,6 +1097,7 @@ class ModulePage extends Component
                     422,
                     'Technician has reached the active assignment limit.',
                 );
+                abort_if($booking->scheduled_at !== null && Booking::hasScheduleConflict($technicianId, $booking->scheduled_at, $booking->id), 422, 'This technician has another job within two hours of the schedule.');
             }
 
             $booking->update([
@@ -812,7 +1211,7 @@ class ModulePage extends Component
             $counter = $entry->counter_id && $this->tableExists('service_counters')
                 ? ServiceCounter::query()->lockForUpdate()->find($entry->counter_id)
                 : null;
-            $reason = $status === 'cancelled' ? 'Cancelled by administrator.' : 'Status updated by administrator.';
+            $reason = $status === 'cancelled' ? 'Cancelled by staff.' : 'Status updated by staff.';
             $entry->transitionTo($status, auth()->user(), $reason, ['source' => 'admin']);
             $counter?->update([
                 'status' => in_array($status, ['called', 'serving'], true) ? 'busy' : 'available',
@@ -862,6 +1261,46 @@ class ModulePage extends Component
         $this->flashStatus('Payment status updated.');
     }
 
+    public function openWalkInCheckout(int $paymentId): void
+    {
+        $this->authorizeSuperAdmin();
+        $payment = WalkInPayment::query()->with('walkInEntry')->findOrFail($paymentId);
+        abort_unless($payment->walkInEntry?->status === 'completed', 422, 'Complete the walk-in service before checkout.');
+        abort_unless($payment->status === 'pending', 409, 'This walk-in payment has already been recorded.');
+
+        $this->checkoutPaymentId = $payment->id;
+        $this->checkoutAmount = (string) $payment->amount;
+        $this->showWalkInCheckout = true;
+        $this->resetValidation();
+    }
+
+    public function recordWalkInCash(): void
+    {
+        $this->authorizeSuperAdmin();
+        abort_unless($this->checkoutPaymentId !== null, 422);
+        $validated = Validator::make(['amount' => $this->checkoutAmount], [
+            'amount' => ['required', 'numeric', 'gt:0', 'max:99999999.99'],
+        ])->validate();
+
+        DB::transaction(function () use ($validated): void {
+            $payment = WalkInPayment::query()->lockForUpdate()->findOrFail($this->checkoutPaymentId);
+            $entry = $payment->walkInEntry()->lockForUpdate()->firstOrFail();
+            abort_unless($entry->status === 'completed' && $payment->status === 'pending', 409, 'This walk-in ticket is not ready for checkout.');
+            $payment->update([
+                'amount' => $validated['amount'],
+                'status' => 'paid',
+                'received_by' => auth()->id(),
+                'paid_at' => now(),
+            ]);
+        });
+
+        $this->recordAudit('walk_in_payment.paid', 'walk_in_payment', $this->checkoutPaymentId, ['amount' => $validated['amount']]);
+        $this->showWalkInCheckout = false;
+        $this->checkoutPaymentId = null;
+        $this->checkoutAmount = '';
+        $this->flashStatus('Walk-in cash payment recorded.');
+    }
+
     public function updateReviewStatus(int $reviewId, string $status): void
     {
         $this->authorizeSuperAdmin();
@@ -904,7 +1343,7 @@ class ModulePage extends Component
         $this->editingSupportTicketId = (int) $ticket->id;
         $this->supportStatus = (string) $ticket->status;
         $this->supportPriority = (string) $ticket->priority;
-        $this->supportMessage = (string) ($ticket->latest_message ?? '');
+        $this->supportMessage = '';
         $this->showSupportEditor = true;
     }
 
@@ -923,16 +1362,26 @@ class ModulePage extends Component
             'latest_message' => ['nullable', 'string', 'max:5000'],
         ])->validate();
 
-        $ticket = SupportTicket::query()->findOrFail($this->editingSupportTicketId);
-        $data = [
-            'status' => $validated['status'],
-            'priority' => $validated['priority'],
-            'latest_message' => $validated['latest_message'] !== '' ? $validated['latest_message'] : null,
-        ];
-        if ($data['latest_message'] !== null) {
-            $data['last_response_at'] = now();
-        }
-        $ticket->update($data);
+        $data = DB::transaction(function () use ($validated): array {
+            $ticket = SupportTicket::query()->lockForUpdate()->findOrFail($this->editingSupportTicketId);
+            $data = [
+                'status' => $validated['status'],
+                'priority' => $validated['priority'],
+            ];
+
+            if (filled($validated['latest_message'])) {
+                $ticket->messages()->create([
+                    'sender_id' => auth()->id(),
+                    'body' => $validated['latest_message'],
+                ]);
+                $data['latest_message'] = $validated['latest_message'];
+                $data['last_response_at'] = now();
+            }
+
+            $ticket->update($data);
+
+            return $data;
+        });
         $this->recordAudit('support.updated', 'support', $this->editingSupportTicketId, $data);
         $this->cancelSupportEditor();
         $this->flashStatus('Support ticket updated.');
@@ -1034,7 +1483,7 @@ class ModulePage extends Component
 
     public function runSystemAction(string $action): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
         $this->validateValue($action, ['clear-cache', 'retry-failed-jobs', 'run-scheduler']);
 
         match ($action) {
@@ -1086,7 +1535,13 @@ class ModulePage extends Component
     private function authorizeSuperAdmin(): void
     {
         $user = auth()->user();
-        abort_unless($user instanceof User && $user->isAdmin(), 403);
+        abort_unless($user instanceof User && $user->canAccessOperationsWorkspace(), 403);
+    }
+
+    private function authorizeAdministrator(): void
+    {
+        $user = auth()->user();
+        abort_unless($user instanceof User && $user->isSuperAdmin(), 403);
     }
 
     /** @param array<int, string> $allowed */
@@ -1141,7 +1596,7 @@ class ModulePage extends Component
 
     public function initializePlatformSettings(): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
         abort_unless($this->tableExists('platform_settings'), 422, 'Platform settings are not available yet.');
         $adminAlertEmail = auth()->user() instanceof User
             ? (string) auth()->user()->email
@@ -1189,7 +1644,7 @@ class ModulePage extends Component
 
     public function openSettingEditor(int $settingId): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
         abort_unless($this->tableExists('platform_settings'), 422, 'Platform settings are not available yet.');
 
         $setting = PlatformSetting::query()->findOrFail($settingId);
@@ -1203,7 +1658,7 @@ class ModulePage extends Component
 
     public function saveSetting(): void
     {
-        $this->authorizeSuperAdmin();
+        $this->authorizeAdministrator();
         abort_unless($this->editingSettingId !== null, 422, 'A setting must be selected.');
 
         $setting = PlatformSetting::query()->findOrFail($this->editingSettingId);
@@ -1348,9 +1803,10 @@ class ModulePage extends Component
         $hasAccountStatus = $this->columnExists('users', 'account_status');
         $active = $hasAccountStatus ? User::query()->where('account_status', 'active')->count() : $total;
         $suspended = $hasAccountStatus ? User::query()->where('account_status', 'suspended')->count() : 0;
-        $staff = User::query()->whereNotIn('role', ['customer', 'technician'])->count();
+        $staff = User::query()->where('role', 'staff')->count();
         $rows = [];
         $rowIds = [];
+        $users = null;
 
         if ($this->tableExists('users')) {
             $columns = ['id', 'name', 'email', 'role', 'email_verified_at', 'created_at'];
@@ -1361,13 +1817,30 @@ class ModulePage extends Component
                 $columns[] = 'last_login_at';
             }
 
-            $rows = User::query()->latest('created_at')->limit(12)->get($columns)->map(
-                function (object $user) use (&$rowIds): array {
+            $search = Str::limit(trim($this->userSearch), 100, '');
+            $users = User::query()
+                ->when($search !== '', fn (Builder $query) => $query->where(
+                    fn (Builder $searchQuery) => $searchQuery
+                        ->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('phone', 'like', '%'.$search.'%')
+                ))
+                ->when($this->userRoleFilter !== 'all', fn (Builder $query) => $query->where('role', $this->userRoleFilter))
+                ->when(
+                    $hasAccountStatus && $this->userStatusFilter !== 'all',
+                    fn (Builder $query) => $query->where('account_status', $this->userStatusFilter),
+                )
+                ->latest('created_at')
+                ->paginate(12, $columns, 'usersPage');
+
+            $rows = $users->getCollection()->map(
+                function (User $user) use (&$rowIds): array {
                     $rowIds[] = (int) $user->id;
 
                     return [
                         (string) $user->name,
-                        Str::headline((string) ($user->role ?? 'customer')),
+                        (string) $user->email,
+                        $user->roleLabel(),
                         Str::headline((string) ($user->account_status ?? 'active')),
                         $user->email_verified_at ? 'Verified' : 'Unverified',
                         $this->formatDate($user->last_login_at ?? null),
@@ -1387,7 +1860,8 @@ class ModulePage extends Component
                 'title' => 'User directory',
                 'subtitle' => 'Manage access, roles, and active sessions.',
                 'columns' => [
-                    $this->tableColumn('user', 'User'),
+                    $this->tableColumn('user', 'Name'),
+                    $this->tableColumn('email', 'Email'),
                     $this->tableColumn('role', 'Role', 'role'),
                     $this->tableColumn('status', 'Status', 'status'),
                     $this->tableColumn('verification', 'Verification', 'verification'),
@@ -1398,66 +1872,65 @@ class ModulePage extends Component
                 'rowIds' => $rowIds,
                 'empty' => 'No user accounts found.',
             ]],
+            'pagination' => $users,
         ];
     }
 
     /** @return array<string, mixed> */
     private function verificationContent(): array
     {
-        $pending = 0;
-        $requested = 0;
-        $approved = 0;
-        $highRisk = 0;
-        $rows = [];
-        $rowIds = [];
+        $search = Str::limit(trim($this->verificationSearch), 100, '');
+        $applications = TechnicianVerification::query()
+            ->with('technician:id,name,email,phone,avatar_path,email_verified_at,account_status,suspended_until')
+            ->when(
+                $this->verificationFilter === 'verified',
+                fn (Builder $query) => $query->where('status', 'approved'),
+                fn (Builder $query) => $query->where('status', '!=', 'approved'),
+            )
+            ->when($search !== '', fn (Builder $query) => $query->whereHas(
+                'technician',
+                fn (Builder $technicianQuery) => $technicianQuery->where('name', 'like', '%'.$search.'%')
+            ))
+            ->latest('submitted_at')
+            ->latest('id')
+            ->paginate(10, ['*'], 'verificationPage');
 
-        if ($this->tableExists('technician_verifications')) {
-            $pending = TechnicianVerification::query()->whereIn('status', ['submitted', 'under_review'])->count();
-            $requested = TechnicianVerification::query()->where('status', 'information_requested')->count();
-            $approved = TechnicianVerification::query()->where('status', 'approved')->count();
-            $highRisk = TechnicianVerification::query()->where('risk_level', 'high')->count();
-            $rows = TechnicianVerification::query()
-                ->with('technician:id,name,email')
-                ->latest('submitted_at')
-                ->limit(12)
-                ->get(['id', 'user_id', 'service_categories', 'years_experience', 'submitted_at', 'risk_level', 'status'])
-                ->map(function (object $verification) use (&$rowIds): array {
-                    $rowIds[] = (int) $verification->id;
+        $applications->getCollection()->each(function (TechnicianVerification $verification): void {
+            $verification->setAttribute('service_labels', $this->listValue($verification->service_categories));
+        });
 
-                    return [
-                        (string) data_get($verification->technician, 'name', '—'),
-                        $this->listValue($verification->service_categories),
-                        "{$verification->years_experience} years",
-                        $this->formatDate($verification->submitted_at),
-                        Str::headline((string) $verification->risk_level),
-                        Str::headline((string) $verification->status),
-                    ];
-                })->all();
+        $selectedVerification = $this->selectedVerificationId
+            ? TechnicianVerification::query()
+                ->with(['technician:id,name,email,phone,avatar_path,email_verified_at,account_status,suspended_until', 'documents:id,verification_id,type,label,file_path,status'])
+                ->find($this->selectedVerificationId)
+            : null;
+
+        if ($selectedVerification !== null) {
+            $selectedVerification->setAttribute('service_labels', $this->listValue($selectedVerification->service_categories));
+            $selectedVerification->documents->each(function ($document): void {
+                $document->setAttribute(
+                    'can_preview',
+                    filled($document->file_path) && Storage::disk('local')->exists($document->file_path)
+                );
+            });
         }
 
+        $latestAccountAction = $selectedVerification?->status === 'approved' && $this->tableExists('audit_logs')
+            ? AuditLog::query()
+                ->where('action', 'technician.account_status_updated')
+                ->where('target_type', 'user')
+                ->where('target_id', $selectedVerification->user_id)
+                ->latest('id')
+                ->first()
+            : null;
+
         return [
-            'stats' => [
-                ['label' => 'Pending review', 'value' => Number::format($pending), 'icon' => 'clock'],
-                ['label' => 'Information requested', 'value' => Number::format($requested), 'icon' => 'chat-bubble-left-right'],
-                ['label' => 'Approved', 'value' => Number::format($approved), 'icon' => 'check-circle'],
-                ['label' => 'High risk', 'value' => Number::format($highRisk), 'icon' => 'exclamation-triangle'],
-            ],
-            'sections' => [[
-                'title' => 'Verification queue',
-                'subtitle' => 'Review technician identities, documents, and approval status.',
-                'columns' => [
-                    $this->tableColumn('applicant', 'Applicant'),
-                    $this->tableColumn('services', 'Services', 'chips'),
-                    $this->tableColumn('experience', 'Experience', 'metric'),
-                    $this->tableColumn('submitted', 'Submitted', 'date'),
-                    $this->tableColumn('risk', 'Risk', 'risk'),
-                    $this->tableColumn('status', 'Status', 'status'),
-                ],
-                'rows' => $rows,
-                'action' => 'verification',
-                'rowIds' => $rowIds,
-                'empty' => 'Submitted technician applications will appear here.',
-            ]],
+            'applications' => $applications,
+            'selectedVerification' => $selectedVerification,
+            'latestAccountAction' => $latestAccountAction,
+            'pendingCount' => Number::format(TechnicianVerification::query()->whereIn('status', ['submitted', 'under_review'])->count()),
+            'needsVerificationCount' => Number::format(TechnicianVerification::query()->where('status', '!=', 'approved')->count()),
+            'verifiedCount' => Number::format(TechnicianVerification::query()->where('status', 'approved')->count()),
         ];
     }
 
@@ -1476,7 +1949,11 @@ class ModulePage extends Component
         $rowIds = [];
 
         if ($this->tableExists('bookings')) {
-            $query = Booking::query()->with(['customer:id,name', 'technician:id,name'])->latest('created_at')->limit(12);
+            $query = Booking::query()
+                ->with(['customer:id,name', 'technician:id,name'])
+                ->when($this->focusedBookingId !== null, fn (Builder $query) => $query->orderByRaw('CASE WHEN bookings.id = ? THEN 0 ELSE 1 END', [$this->focusedBookingId]))
+                ->latest('created_at')
+                ->limit(12);
             $select = ['id', 'user_id', 'reference', 'customer_name', 'service_type', 'booking_type', 'scheduled_at', 'status', 'assigned_technician_id'];
             if ($this->columnExists('bookings', 'is_priority')) {
                 $select[] = 'is_priority';
@@ -1739,7 +2216,7 @@ class ModulePage extends Component
     {
         $rows = [];
         $rowIds = [];
-        $metricsVersion = $this->latestDataVersion(['payments', 'bookings']);
+        $metricsVersion = $this->latestDataVersion(['payments', 'bookings', 'walk_in_payments']);
         $metrics = Cache::remember(
             "fixtrack:payments:metrics:{$metricsVersion}",
             now()->addSeconds(30),
@@ -1749,13 +2226,13 @@ class ModulePage extends Component
                 }
 
                 return [
-                    'totalCollected' => $this->tableExists('bookings')
+                    'totalCollected' => ($this->tableExists('bookings')
                         ? (float) Payment::query()
                             ->where('status', 'paid')
                             ->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', 'completed'))
                             ->sum('amount')
-                        : 0.0,
-                    'pending' => Payment::query()->where('status', 'pending')->count(),
+                        : 0.0) + ($this->tableExists('walk_in_payments') ? (float) WalkInPayment::query()->where('status', 'paid')->sum('amount') : 0.0),
+                    'pending' => Payment::query()->where('status', 'pending')->count() + ($this->tableExists('walk_in_payments') ? WalkInPayment::query()->where('status', 'pending')->count() : 0),
                     'failed' => Payment::query()->where('status', 'failed')->count(),
                     'refunded' => Payment::query()->where('status', 'refunded')->count(),
                 ];
@@ -1805,6 +2282,26 @@ class ModulePage extends Component
                 'action' => 'payments',
                 'rowIds' => $rowIds,
                 'empty' => 'No payment transactions yet.',
+            ], [
+                'title' => 'Walk-in cash checkout',
+                'subtitle' => 'Set the final amount and record cash collected at the shop.',
+                'columns' => [
+                    $this->tableColumn('ticket', 'Ticket'),
+                    $this->tableColumn('customer', 'Customer'),
+                    $this->tableColumn('amount', 'Amount', 'money'),
+                    $this->tableColumn('status', 'Status', 'status'),
+                    $this->tableColumn('date', 'Completed', 'date'),
+                ],
+                'rows' => $this->tableExists('walk_in_payments') ? WalkInPayment::query()->with('walkInEntry')->latest('created_at')->limit(12)->get()->map(fn (WalkInPayment $payment): array => [
+                    (string) $payment->walkInEntry?->queue_number,
+                    (string) $payment->walkInEntry?->customer_name,
+                    'PHP '.Number::format((float) $payment->amount, 2),
+                    Str::headline($payment->status),
+                    $this->formatDate($payment->walkInEntry?->completed_at),
+                ])->all() : [],
+                'action' => 'walk-in-payments',
+                'rowIds' => $this->tableExists('walk_in_payments') ? WalkInPayment::query()->latest('created_at')->limit(12)->pluck('id')->all() : [],
+                'empty' => 'No completed walk-in payments yet.',
             ]],
         ];
     }
@@ -2204,6 +2701,7 @@ class ModulePage extends Component
         $models = [
             'bookings' => Booking::class,
             'payments' => Payment::class,
+            'walk_in_payments' => WalkInPayment::class,
             'reviews' => Review::class,
             'support_tickets' => SupportTicket::class,
             'service_catalog' => ServiceCatalog::class,
@@ -2287,5 +2785,14 @@ class ModulePage extends Component
         $free = disk_free_space(storage_path()) ?: 0;
 
         return $total > 0 ? Number::format((1 - $free / $total) * 100, 1).'%' : '—';
+    }
+
+    private function operationsRouteName(string $route): string
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user->operationsRouteName($route);
     }
 }

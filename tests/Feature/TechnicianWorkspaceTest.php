@@ -2,6 +2,8 @@
 
 use App\Livewire\Customer\ModulePage as CustomerModulePage;
 use App\Livewire\Technician\ModulePage;
+use App\Models\Booking;
+use App\Models\PlatformSetting;
 use App\Models\ServiceCatalog;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,29 @@ function technicianBooking(int $customerId, ?int $technicianId, string $status =
         'updated_at' => now(),
     ]);
 }
+
+test('a technician cannot accept a scheduled booking that overlaps another active job', function () {
+    $customer = User::factory()->create(['role' => 'customer']);
+    $technician = User::factory()->create(['role' => 'technician', 'account_status' => 'active', 'availability_status' => 'available']);
+    PlatformSetting::query()->create(['key' => 'max_active_jobs', 'group' => 'booking', 'label' => 'Maximum active jobs', 'value' => '3', 'type' => 'integer']);
+    DB::table('technician_verifications')->insert([
+        'user_id' => $technician->id,
+        'status' => 'approved',
+        'risk_level' => 'low',
+        'service_categories' => json_encode(['plumbing']),
+        'years_experience' => 2,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    technicianBooking($customer->id, $technician->id, 'assigned', now()->addDay()->toDateTimeString());
+    $overlappingBookingId = technicianBooking($customer->id, null, 'matching', now()->addDay()->addHour()->toDateTimeString());
+
+    $this->actingAs($technician);
+
+    expect(fn () => (new ModulePage)->acceptRequest($overlappingBookingId))
+        ->toThrow(HttpException::class, 'another job within two hours');
+    expect(Booking::query()->findOrFail($overlappingBookingId)->assigned_technician_id)->toBeNull();
+});
 
 test('technicians are redirected to their workspace and see technician navigation', function () {
     $technician = User::factory()->create(['role' => 'technician']);

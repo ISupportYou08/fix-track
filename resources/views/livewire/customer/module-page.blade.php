@@ -15,7 +15,7 @@
     $mobileTab = match ($moduleSlug) {
         'overview' => 'home',
         'my-bookings', 'walk-in-queue', 'quotations', 'payments' => 'activity',
-        'notifications', 'support' => 'messages',
+        'messages', 'notifications', 'support' => 'messages',
         'settings', 'ratings-reviews' => 'account',
         default => null,
     };
@@ -32,7 +32,17 @@
     @if ($mobileTab)
         @include('livewire.customer.mobile-shell', ['tab' => $mobileTab])
     @endif
+    @if ($moduleSlug === 'support')
+        <div class="space-y-2 px-4 pb-6 lg:hidden">
+            @foreach ($content['tickets'] as $ticket)
+                <button type="button" wire:key="mobile-support-open-{{ $ticket->id }}" wire:click="openSupportConversation({{ $ticket->id }})" class="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-blue-700 dark:border-white/10 dark:bg-zinc-900 dark:text-blue-300">Open conversation · {{ $ticket->reference }}</button>
+            @endforeach
+        </div>
+    @endif
 
+    @if ($moduleSlug === 'overview')
+        @include('livewire.customer.dashboard-overview')
+    @else
     <div class="{{ $mobileTab ? 'hidden lg:flex' : 'flex' }} w-full flex-col gap-6 p-6 lg:p-8">
         <div class="dashboard-reveal">
         <flux:breadcrumbs>
@@ -55,6 +65,7 @@
         </div>
     </div>
 
+    @if (! empty($content['stats']))
     <div class="dashboard-stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($content['stats'] as $stat)
             <flux:card class="dashboard-reveal card-lift shadow-sm !border-s-4 !border-s-violet-400">
@@ -70,8 +81,9 @@
             </flux:card>
         @endforeach
     </div>
+    @endif
 
-    @if ($moduleSlug === 'overview')
+    @if ($moduleSlug === '__legacy-overview')
         @php $currentBooking = $content['currentBooking']; @endphp
         @if ($content['currentWalkIn'])
             @php $currentWalkIn = $content['currentWalkIn']; @endphp
@@ -81,7 +93,7 @@
                         <flux:text class="text-xs font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">Current Walk-In queue</flux:text>
                         <div class="mt-2 flex flex-wrap items-center gap-3"><flux:heading size="xl" class="font-mono">{{ $currentWalkIn->queue_number }}</flux:heading><x-super-admin.table-cell :value="$currentWalkIn->status" type="status" /></div>
                     </div>
-                    <div class="rounded-xl bg-white/80 px-4 py-3 text-center shadow-sm dark:bg-zinc-950/40"><div class="text-xs text-zinc-500">Queue position</div><div class="mt-1 text-2xl font-semibold">#{{ $currentWalkIn->queue_position }}</div></div>
+                    <div class="rounded-xl bg-white/80 px-4 py-3 text-center shadow-sm dark:bg-zinc-950/40"><div class="text-xs text-zinc-500">Queue position</div><div class="mt-1 text-2xl font-semibold">#{{ $currentWalkIn->queue_position }}</div><div class="mt-1 text-xs text-zinc-500">{{ $currentWalkIn->estimatedWaitMinutes() === 0 ? 'Next in line' : 'About '.$currentWalkIn->estimatedWaitMinutes().' min wait' }}</div></div>
                 </div>
                 <div class="mt-5 grid gap-4 text-sm sm:grid-cols-3">
                     <div><flux:text class="text-zinc-500">Service</flux:text><div class="mt-1 font-medium">{{ $serviceLabel($currentWalkIn->service_type) }}</div></div>
@@ -260,10 +272,7 @@
         <div class="grid gap-6 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
             @if ($content['available'])
                 <flux:card class="dashboard-reveal shadow-sm">
-                    <div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Join the queue</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Check in for an in-person service visit.</flux:text></div><flux:badge :color="$content['availableSlots'] > 0 ? 'emerald' : 'red'" size="sm">{{ $content['availableSlots'] }} / {{ $content['capacity'] }} slots</flux:badge></div>
-                    @if ($content['availableSlots'] === 0)
-                        <flux:callout class="mt-5" variant="danger" icon="exclamation-triangle" heading="Walk-In Queue is currently full">Maximum capacity is 3 customers. Please wait until a slot becomes available.</flux:callout>
-                    @endif
+                    <div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Join the queue</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Check in for an in-person service visit. Each shop has three active places.</flux:text></div><flux:badge color="emerald" size="sm">3 per shop</flux:badge></div>
                     <form class="mt-6 space-y-4" wire:submit="joinWalkInQueue">
                         <flux:select wire:model="walkInServiceType" label="Service type" placeholder="Choose a service">
                             @foreach ($content['services'] as $service)
@@ -274,7 +283,7 @@
                         <flux:textarea wire:model="walkInNotes" label="Notes" rows="4" placeholder="Add anything the service counter should know." />
                         <div class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-500/10 dark:text-emerald-200"><span class="font-semibold">Payment Method: Cash</span><span class="mt-1 block">Payment will be made in cash at the shop after the service.</span></div>
                         @error('walkInQueue')<flux:callout variant="danger" icon="exclamation-triangle">{{ $message }}</flux:callout>@enderror
-                        <div class="flex justify-end"><flux:button type="submit" variant="primary" icon="queue-list" :disabled="$content['availableSlots'] === 0">Join queue</flux:button></div>
+                        <div class="flex justify-end"><flux:button type="submit" variant="primary" icon="queue-list">Join queue</flux:button></div>
                     </form>
                 </flux:card>
             @else
@@ -345,17 +354,26 @@
                 <div class="border-t border-zinc-200 px-4 py-3 dark:border-white/10">{{ $content['payments']->links() }}</div>
             </div>
         </div>
+        <div class="dashboard-reveal"><flux:heading size="lg">Walk-in cash payments</flux:heading><div class="mt-3 space-y-2">@forelse ($content['walkInPayments'] as $walkInPayment)<div wire:key="customer-walk-in-payment-{{ $walkInPayment->id }}" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div><div class="font-semibold">{{ $walkInPayment->walkInEntry?->queue_number }}</div><div class="text-sm text-zinc-500">₱{{ number_format((float) $walkInPayment->amount, 2) }} · {{ ucfirst($walkInPayment->status) }}</div></div>@if ($walkInPayment->status === 'paid')<flux:button size="sm" variant="outline" href="{{ route('walk-ins.receipt', ['entry' => $walkInPayment->walk_in_entry_id]) }}" target="_blank">Receipt</flux:button>@endif</div>@empty<flux:text class="mt-3 text-sm text-zinc-500">No completed walk-in checkouts yet.</flux:text>@endforelse</div><div class="mt-3">{{ $content['walkInPayments']->links() }}</div></div>
     @elseif ($moduleSlug === 'ratings-reviews')
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,0.7fr)]"><div class="dashboard-reveal"><div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Your reviews</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Feedback helps technicians and the FixTrack service improve.</flux:text></div><x-super-admin.section-menu :actions="[['label' => __('Refresh reviews'), 'icon' => 'arrow-path', 'wire' => '$refresh']]" /></div><div class="app-table-shell mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" data-app-table-shell><flux:table class="w-full min-w-[720px]"><flux:table.columns><flux:table.column>Booking</flux:table.column><flux:table.column>Technician</flux:table.column><flux:table.column>Rating</flux:table.column><flux:table.column>Review</flux:table.column><flux:table.column>Status</flux:table.column></flux:table.columns><flux:table.rows>@forelse ($content['reviews'] as $review)<flux:table.row :key="'review-'.$review->id"><flux:table.cell variant="strong">{{ $review->booking?->reference ?: '—' }}</flux:table.cell><flux:table.cell>{{ $review->technician?->name ?: '—' }}</flux:table.cell><flux:table.cell><flux:badge color="amber" size="sm">★ {{ $review->rating }} / 5</flux:badge></flux:table.cell><flux:table.cell class="max-w-sm truncate">{{ $review->comment ?: 'No written feedback.' }}</flux:table.cell><flux:table.cell><x-super-admin.table-cell :value="$review->status" type="status" /></flux:table.cell></flux:table.row>@empty<flux:table.row><flux:table.cell colspan="5" class="py-14 text-center text-zinc-500">No reviews submitted yet.</flux:table.cell></flux:table.row>@endforelse</flux:table.rows></flux:table></flux:table><div class="border-t border-zinc-200 px-4 py-3 dark:border-white/10">{{ $content['reviews']->links() }}</div></div></div><flux:card class="dashboard-reveal shadow-sm"><div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Leave feedback</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Review completed services when you are ready.</flux:text></div><flux:icon name="star" class="size-5 text-amber-500" /></div><div class="mt-5 space-y-3">@forelse ($content['reviewableBookings'] as $booking)<div class="rounded-xl border border-zinc-200 p-3 dark:border-white/10"><div class="flex items-center justify-between gap-3"><div><div class="font-medium">{{ $serviceLabel($booking->service_type) }}</div><flux:text class="text-xs text-zinc-500">{{ $booking->reference }}</flux:text></div><flux:button size="sm" variant="primary" wire:click="startReview({{ $booking->id }})">Review</flux:button></div></div>@empty<flux:text class="text-sm text-zinc-500">Completed bookings ready for feedback will appear here.</flux:text>@endforelse</div>@if ($reviewBookingId)<form class="mt-5 space-y-4 border-t border-zinc-200 pt-5 dark:border-white/10" wire:submit="createReview"><flux:select wire:model="reviewRating" label="Rating" placeholder="Choose a rating"><flux:select.option value="1">1 / 5</flux:select.option><flux:select.option value="2">2 / 5</flux:select.option><flux:select.option value="3">3 / 5</flux:select.option><flux:select.option value="4">4 / 5</flux:select.option><flux:select.option value="5">5 / 5</flux:select.option></flux:select><flux:textarea wire:model="reviewComment" label="Comment" rows="3" placeholder="Tell us about the service." /><div class="flex justify-end"><flux:button type="submit" variant="primary">Submit review</flux:button></div></form>@endif</flux:card></div>
+    @elseif ($moduleSlug === 'messages')
+        <livewire:booking-messenger :key="'customer-messages'" />
     @elseif ($moduleSlug === 'notifications')
         <div class="dashboard-reveal"><div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Latest updates</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Booking and support activity collected for your account.</flux:text></div><x-super-admin.section-menu :actions="[['label' => __('Refresh updates'), 'icon' => 'arrow-path', 'wire' => '$refresh']]" /></div><div class="mt-4 grid gap-3">@forelse ($content['items'] as $item)<div class="flex items-start gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300"><flux:icon name="bell" class="size-5" /></div><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center justify-between gap-2"><flux:heading size="sm">{{ $item['title'] }}</flux:heading><x-super-admin.table-cell :value="$item['status']" type="status" /></div><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">{{ $item['detail'] }}</flux:text><flux:text class="mt-2 text-xs text-zinc-400">{{ $formatDateTime($item['date']) }}</flux:text></div></div>@empty<div class="rounded-xl border border-dashed border-zinc-300 px-6 py-14 text-center dark:border-zinc-700"><flux:icon name="bell" class="mx-auto size-8 text-zinc-400" /><flux:heading size="lg" class="mt-4">No new updates</flux:heading><flux:text class="mt-1 text-zinc-500">You are all caught up.</flux:text></div>@endforelse</div></div>
     @elseif ($moduleSlug === 'support')
         <div class="grid gap-6 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]"><flux:card class="dashboard-reveal shadow-sm"><div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Contact support</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Send a request and keep the conversation tied to your account.</flux:text></div><flux:icon name="chat-bubble-left-right" class="size-5 text-violet-500" /></div><form class="mt-6 space-y-4" wire:submit="createSupportTicket"><flux:input wire:model="supportSubject" label="Subject" required /><div class="grid gap-4 sm:grid-cols-2"><flux:select wire:model="supportCategory" label="Category"><flux:select.option value="booking">Booking</flux:select.option><flux:select.option value="payment">Payment</flux:select.option><flux:select.option value="technical">Technical</flux:select.option><flux:select.option value="account">Account</flux:select.option><flux:select.option value="other">Other</flux:select.option></flux:select><flux:select wire:model="supportPriority" label="Priority"><flux:select.option value="low">Low</flux:select.option><flux:select.option value="normal">Normal</flux:select.option><flux:select.option value="high">High</flux:select.option></flux:select></div><flux:textarea wire:model="supportMessage" label="Message" rows="5" required /><div class="flex justify-end"><flux:button type="submit" variant="primary" icon="paper-airplane">Send request</flux:button></div></form></flux:card><div class="dashboard-reveal"><div class="flex items-start justify-between gap-3"><div><flux:heading size="lg">Your support requests</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Track questions about bookings, payments, or your account.</flux:text></div><x-super-admin.section-menu :actions="[['label' => __('Refresh requests'), 'icon' => 'arrow-path', 'wire' => '$refresh']]" /></div><div class="app-table-shell mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" data-app-table-shell><flux:table class="w-full min-w-[720px]"><flux:table.columns><flux:table.column>Reference</flux:table.column><flux:table.column>Subject</flux:table.column><flux:table.column>Category</flux:table.column><flux:table.column>Priority</flux:table.column><flux:table.column>Updated</flux:table.column><flux:table.column>Status</flux:table.column></flux:table.columns><flux:table.rows>@forelse ($content['tickets'] as $ticket)<flux:table.row :key="'ticket-'.$ticket->id"><flux:table.cell variant="strong">{{ $ticket->reference }}</flux:table.cell><flux:table.cell>{{ $ticket->subject }}</flux:table.cell><flux:table.cell><x-super-admin.table-cell :value="$ticket->category" type="category" /></flux:table.cell><flux:table.cell><x-super-admin.table-cell :value="$ticket->priority" type="priority" /></flux:table.cell><flux:table.cell class="whitespace-nowrap text-zinc-500">{{ $formatDateTime($ticket->updated_at) }}</flux:table.cell><flux:table.cell><x-super-admin.table-cell :value="$ticket->status" type="status" /></flux:table.cell></flux:table.row>@empty<flux:table.row><flux:table.cell colspan="6" class="py-14 text-center text-zinc-500">No support requests yet.</flux:table.cell></flux:table.row>@endforelse</flux:table.rows></flux:table></div><div class="mt-4">{{ $content['tickets']->links() }}</div></div></div>
+        <div class="mt-4 space-y-2">
+            @foreach ($content['tickets'] as $ticket)
+                <button type="button" wire:key="support-open-{{ $ticket->id }}" wire:click="openSupportConversation({{ $ticket->id }})" class="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-white/10 dark:bg-zinc-900 dark:text-blue-300 dark:hover:bg-blue-500/10">View conversation · {{ $ticket->reference }} · {{ $ticket->subject }}</button>
+            @endforeach
+        </div>
     @elseif ($moduleSlug === 'settings')
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]"><flux:card class="dashboard-reveal shadow-sm"><div class="flex items-start gap-4"><div class="flex size-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-white/10 dark:text-zinc-200">{{ $content['user']->initials() }}</div><div><flux:heading size="lg">{{ $content['user']->name }}</flux:heading><flux:text class="mt-1 text-zinc-500">{{ $content['user']->email }}</flux:text><div class="mt-3"><x-super-admin.table-cell :value="$content['user']->email_verified_at ? 'Verified' : 'Pending'" type="status" /></div></div></div><div class="mt-8 grid gap-3 sm:grid-cols-3"><flux:button variant="primary" href="{{ route('profile.edit') }}" wire:navigate>Profile</flux:button><flux:button variant="subtle" href="{{ route('security.edit') }}" wire:navigate>Security</flux:button><flux:button variant="subtle" href="{{ route('appearance.edit') }}" wire:navigate>Appearance</flux:button></div></flux:card><flux:card class="dashboard-reveal shadow-sm"><flux:heading size="lg">Account preferences</flux:heading><flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Use the settings pages to update your profile and sign-in protection.</flux:text><div class="mt-6 space-y-3 text-sm"><div class="flex items-center justify-between gap-3 border-b border-zinc-200 pb-3 dark:border-white/10"><span class="text-zinc-500">Role</span><x-super-admin.table-cell :value="ucfirst($content['user']->role)" type="role" /></div><div class="flex items-center justify-between gap-3"><span class="text-zinc-500">Member since</span><span>{{ $formatDate($content['user']->created_at) }}</span></div></div></flux:card></div>
     @endif
 
     </div>
+    @endif
 
     @php
         $isWalkInBooking = $bookingFlow === 'manual' && $manualServiceMode === 'walk-in';
@@ -527,7 +545,7 @@
                                 <label for="booking-description" class="text-xs font-semibold text-zinc-900 dark:text-white">What needs attention? <span class="text-red-600">*</span></label>
                                 <p class="mt-0.5 text-xs leading-4 text-zinc-500 dark:text-zinc-400">These details will be shared with the technician so they can prepare.</p>
                             </div>
-                            <span class="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Required</span>
+                            <span class="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Required</span>
                         </div>
                         <flux:textarea id="booking-description" wire:model="description" aria-label="What needs attention?" class="mt-2" placeholder="Describe the issue, symptoms, or anything the technician should bring." rows="2" required />
                     </div>
@@ -543,6 +561,7 @@
                             <div class="mt-2 text-4xl font-bold tracking-tight text-violet-700 dark:text-violet-300">{{ $walkInTicket->queue_number }}</div>
                             <div class="mt-6 space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
                                 <div><span class="block text-xs font-semibold uppercase tracking-wide text-zinc-500">Queue Position</span><span>{{ $walkInTicket->queue_position ? '#'.$walkInTicket->queue_position.' of '.$walkInTicket::MAX_ACTIVE : 'No longer in the active queue' }}</span></div>
+                                @if ($walkInTicket->estimatedWaitMinutes() !== null)<div><span class="block text-xs font-semibold uppercase tracking-wide text-zinc-500">Estimated wait</span><span>{{ $walkInTicket->estimatedWaitMinutes() === 0 ? 'Next in line' : 'About '.$walkInTicket->estimatedWaitMinutes().' minutes' }} (based on 30 minutes per customer; actual wait may vary)</span></div>@endif
                                 <div><span class="block text-xs font-semibold uppercase tracking-wide text-zinc-500">Reference Number</span><span>{{ $walkInTicket->reference }}</span></div>
                                 <div><span class="block text-xs font-semibold uppercase tracking-wide text-zinc-500">Shop Address</span><span>{{ $walkInTicket->technician?->technicianVerification?->address }}</span></div>
                                 <div><span class="block text-xs font-semibold uppercase tracking-wide text-zinc-500">Issued On</span><span>{{ $walkInTicket->checked_in_at?->timezone('Asia/Manila')->format('F j, Y g:i A') }}</span></div>
@@ -692,12 +711,18 @@
                     <div><flux:text class="text-zinc-500">Reference number</flux:text><div class="mt-1 font-mono text-xs">{{ $selectedWalkInEntry->reference ?: 'Not available' }}</div></div>
                     <div><flux:text class="text-zinc-500">Service</flux:text><div class="mt-1">{{ $serviceLabel($selectedWalkInEntry->service_type) }}</div></div>
                     <div><flux:text class="text-zinc-500">Queue position</flux:text><div class="mt-1">{{ $selectedWalkInEntry->queue_position ? '#'.$selectedWalkInEntry->queue_position.' of '.$selectedWalkInEntry::MAX_ACTIVE : 'No longer active' }}</div></div>
+                    @if ($selectedWalkInEntry->estimatedWaitMinutes() !== null)<div><flux:text class="text-zinc-500">Estimated wait</flux:text><div class="mt-1">{{ $selectedWalkInEntry->estimatedWaitMinutes() === 0 ? 'Next in line' : 'About '.$selectedWalkInEntry->estimatedWaitMinutes().' minutes' }} <span class="text-xs text-zinc-500">(actual wait may vary)</span></div></div>@endif
                     <div><flux:text class="text-zinc-500">Payment method</flux:text><div class="mt-1">Cash</div></div>
                     <div><flux:text class="text-zinc-500">Checked in</flux:text><div class="mt-1">{{ $formatDateTime($selectedWalkInEntry->checked_in_at) }}</div></div>
                     <div><flux:text class="text-zinc-500">Contact number</flux:text><div class="mt-1">{{ $selectedWalkInEntry->customer_phone ?: 'Not provided' }}</div></div>
                     <div class="sm:col-span-2"><flux:text class="text-zinc-500">Shop</flux:text><div class="mt-1">{{ $selectedWalkInEntry->technician?->name ? $selectedWalkInEntry->technician->name.' Service Store' : 'Not assigned' }}</div><div class="mt-1 text-zinc-500">{{ $selectedWalkInEntry->technician?->technicianVerification?->address ?: 'Shop address not available' }}</div></div>
                     <div class="sm:col-span-2"><flux:text class="text-zinc-500">Service request details</flux:text><div class="mt-1 whitespace-pre-line">{{ $selectedWalkInEntry->notes ?: 'No additional details provided.' }}</div></div>
                 </div>
+                @if ($selectedWalkInEntry->payment?->status === 'paid')
+                    <a href="{{ route('walk-ins.receipt', ['entry' => $selectedWalkInEntry->id]) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">View cash receipt</a>
+                @elseif ($selectedWalkInEntry->payment?->status === 'pending')
+                    <flux:callout icon="clock" heading="Awaiting cash checkout">The shop will record your final payment after service.</flux:callout>
+                @endif
                 @if ($selectedWalkInEntry->isActive())
                     <div class="rounded-xl border border-zinc-200 p-4 dark:border-white/10" data-app-walk-in-tracking data-walk-in-entry-id="{{ $selectedWalkInEntry->id }}" data-walk-in-active="true" data-location-sharing="{{ $selectedWalkInEntry->location_sharing_enabled ? 'true' : 'false' }}">
                         <div class="flex items-center justify-between gap-3"><div><div class="font-semibold">Live location</div><div class="mt-1 text-sm text-zinc-500">Location Sharing: {{ $selectedWalkInEntry->location_sharing_enabled ? 'Active' : 'Off' }}</div></div><flux:icon name="map-pin" class="size-5 text-violet-500" /></div>
@@ -737,5 +762,31 @@
             <flux:textarea wire:model="cancellationReason" label="Reason" rows="4" required />
             <div class="flex justify-end gap-3"><flux:button type="button" variant="outline" wire:click="closeCancellation">Keep booking</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelBooking">Confirm cancellation</flux:button></div>
         </form>
+    </flux:modal>
+    <flux:modal name="customer-support-conversation" class="max-w-2xl" @close="closeSupportConversation" wire:model="showSupportConversation">
+        @if ($selectedSupportTicket)
+            <div class="space-y-5">
+                <div><flux:heading size="lg">{{ $selectedSupportTicket->subject }}</flux:heading><flux:text class="mt-1">{{ $selectedSupportTicket->reference }} · {{ \Illuminate\Support\Str::headline($selectedSupportTicket->status) }}</flux:text></div>
+                <div class="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Opened {{ $formatDateTime($selectedSupportTicket->created_at) }} · Last staff response {{ $formatDateTime($selectedSupportTicket->last_response_at) }}</div>
+                <div class="max-h-80 space-y-3 overflow-y-auto">
+                    @forelse ($selectedSupportTicket->messages as $message)
+                        <article wire:key="support-message-{{ $message->id }}" class="rounded-xl border border-zinc-200 p-3 text-sm dark:border-white/10">
+                            <div class="flex justify-between gap-2 font-semibold"><span>{{ $message->sender?->name ?: 'Support' }}</span><span class="text-xs font-normal text-zinc-500">{{ $formatDateTime($message->created_at) }}</span></div>
+                            <p class="mt-2 whitespace-pre-wrap">{{ $message->body }}</p>
+                            @if ($message->attachment_path)<a class="mt-2 inline-block text-blue-600 underline" href="{{ route('support.attachment', $message) }}">Download {{ $message->attachment_name }}</a>@endif
+                        </article>
+                    @empty
+                        <p class="text-sm text-zinc-500">{{ $selectedSupportTicket->latest_message }}</p>
+                    @endforelse
+                </div>
+                @if ($selectedSupportTicket->status !== 'closed')
+                    <form wire:submit="replyToSupportTicket" class="space-y-3">
+                        <flux:textarea wire:model="supportReply" label="Reply" rows="3" required />
+                        <flux:input wire:model="supportAttachment" label="Attachment (PDF or image, up to 5 MB)" type="file" />
+                        <div class="flex justify-end"><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="replyToSupportTicket,supportAttachment">Send reply</flux:button></div>
+                    </form>
+                @endif
+            </div>
+        @endif
     </flux:modal>
 </div>

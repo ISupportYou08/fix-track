@@ -4,12 +4,13 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
-use App\Models\ServiceCatalog;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
+use Throwable;
 
 class CreateNewUser implements CreatesNewUsers
 {
@@ -22,45 +23,54 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
-        if (! array_key_exists('service_categories', $input) && isset($input['service_category'])) {
-            $input['service_categories'] = [$input['service_category']];
+        if (($input['role'] ?? null) === 'technician') {
+            throw ValidationException::withMessages([
+                'role' => 'Use the technician application form to create a technician account.',
+            ]);
         }
 
-        $serviceCodes = ServiceCatalog::activeCodes();
-
         $validated = Validator::make($input, [
-            ...$this->profileRules(),
+            'first_name' => ['required', 'string', 'max:80'],
+            'middle_name' => ['nullable', 'string', 'max:80'],
+            'surname' => ['required', 'string', 'max:80'],
+            'phone' => ['required', 'string', 'max:30'],
+            'address' => ['required', 'string', 'max:255'],
+            'email' => $this->emailRules(),
             'password' => $this->passwordRules(),
-            'role' => ['required', Rule::in(['customer', 'technician'])],
-            'phone' => ['nullable', 'required_if:role,technician', 'string', 'max:30'],
-            'service_category' => ['nullable', 'string', Rule::in($serviceCodes)],
-            'service_categories' => ['nullable', 'required_if:role,technician', 'array', 'min:1'],
-            'service_categories.*' => ['string', Rule::in($serviceCodes)],
-            'service_area' => ['nullable', 'required_if:role,technician', 'string', 'max:255'],
-            'years_experience' => ['nullable', 'required_if:role,technician', 'integer', 'min:0', 'max:60'],
+            'role' => ['required', Rule::in(['customer'])],
+            'profile_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ])->validate();
 
-        return DB::transaction(function () use ($validated): User {
-            $user = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => $validated['password'],
-                'role' => $validated['role'],
-            ]);
+        $avatarPath = null;
 
-            if ($user->isTechnician()) {
-                $user->technicianVerification()->create([
-                    'status' => 'submitted',
-                    'risk_level' => 'low',
-                    'service_categories' => ServiceCatalog::normalizeCodes($validated['service_categories']),
-                    'years_experience' => (int) $validated['years_experience'],
-                    'service_area' => $validated['service_area'],
-                    'phone' => $validated['phone'],
-                    'submitted_at' => now(),
-                ]);
+        try {
+            if (isset($validated['profile_photo'])) {
+                $avatarPath = $validated['profile_photo']->store('avatars', 'public');
             }
 
-            return $user;
-        });
+            return User::create([
+                'name' => implode(' ', array_filter([
+                    $validated['first_name'],
+                    $validated['middle_name'] ?? null,
+                    $validated['surname'],
+                ])),
+                'first_name' => $validated['first_name'],
+                'middle_name' => $validated['middle_name'] ?? null,
+                'surname' => $validated['surname'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'],
+                'address' => $validated['address'],
+                'password' => $validated['password'],
+                'role' => 'customer',
+                'account_status' => 'active',
+                'avatar_path' => $avatarPath,
+            ]);
+        } catch (Throwable $exception) {
+            if (is_string($avatarPath)) {
+                Storage::disk('public')->delete($avatarPath);
+            }
+
+            throw $exception;
+        }
     }
 }

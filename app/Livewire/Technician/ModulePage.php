@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Technician;
 
+use App\Actions\Bookings\OpenBookingChat;
 use App\Concerns\HandlesProfilePhoto;
 use App\Models\AuditLog;
 use App\Models\Booking;
@@ -15,6 +16,7 @@ use App\Models\TechnicianRequestDecline;
 use App\Models\TechnicianVerification;
 use App\Models\User;
 use App\Models\WalkInEntry;
+use App\Models\WalkInPayment;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -169,6 +171,12 @@ class ModulePage extends Component
                 'icon' => 'bell',
                 'group' => 'Account',
             ],
+            'messages' => [
+                'label' => 'Messages',
+                'description' => 'Ask the assistant for help and chat with customers from accepted bookings.',
+                'icon' => 'chat-bubble-left-right',
+                'group' => 'Account',
+            ],
             'support' => [
                 'label' => 'Support & Help',
                 'description' => 'Access service support and review help requests.',
@@ -180,7 +188,7 @@ class ModulePage extends Component
 
     public function mount(?string $module = null): void
     {
-        $this->authorizeTechnician();
+        $this->authorizeTechnician(requiresActiveAccount: false);
         $module ??= 'overview';
         abort_unless(array_key_exists($module, self::modules()), 404);
 
@@ -189,6 +197,15 @@ class ModulePage extends Component
 
     public function render(): View
     {
+        $user = auth()->user();
+
+        if ($user instanceof User && ! $user->hasActiveAccount()) {
+            return view('livewire.technician.application-status', [
+                'verification' => $user->technicianVerification()->with('documents')->first(),
+                'serviceCatalog' => ServiceCatalog::activeCatalog(),
+            ]);
+        }
+
         return view('livewire.technician.module-page', [
             'module' => self::modules()[$this->moduleSlug],
             'moduleState' => $this->moduleState(),
@@ -197,6 +214,11 @@ class ModulePage extends Component
             'selectedRequest' => $this->selectedRequest(),
             'selectedWalkInEntry' => $this->selectedWalkInEntry(),
         ]);
+    }
+
+    public function hydrate(): void
+    {
+        $this->authorizeTechnician();
     }
 
     public function updatingRequestSearch(): void
@@ -459,12 +481,7 @@ class ModulePage extends Component
                 409,
                 'You have reached your active job limit.',
             );
-            abort_if(
-                $booking->scheduled_at !== null
-                && Booking::query()->whereBelongsTo($technician, 'technician')->whereIn('status', Booking::ACTIVE_STATUSES)->where('scheduled_at', $booking->scheduled_at)->exists(),
-                409,
-                'You already have a job scheduled at this time.',
-            );
+            abort_if($booking->scheduled_at !== null && Booking::hasScheduleConflict($technician->id, $booking->scheduled_at, $booking->id), 409, 'You have another job within two hours of this schedule.');
             abort_if(
                 $this->tableExists('technician_request_declines')
                 && TechnicianRequestDecline::query()->whereBelongsTo($technician, 'technician')->whereBelongsTo($booking, 'booking')->exists(),
@@ -476,6 +493,7 @@ class ModulePage extends Component
                 'assigned_technician_id' => $technician->id,
             ]);
             $booking->transitionTo('en_route', $technician, 'Accepted request.', ['source' => 'technician'], $idempotencyKey);
+            app(OpenBookingChat::class)->execute($booking, $technician);
 
             if ($this->columnExists('users', 'availability_status')) {
                 $technician->update(['availability_status' => 'busy']);
@@ -576,6 +594,10 @@ class ModulePage extends Component
                 default => 'Job completed.',
             }, ['source' => 'technician'], $idempotencyKey);
 
+            if ($status === 'en_route') {
+                app(OpenBookingChat::class)->execute($booking, $technician);
+            }
+
             if ($status === 'completed' && $this->tableExists('payments')) {
                 $payment = Booking::query()->findOrFail($bookingId)->ensurePayment();
                 $paymentId = (int) $payment->id;
@@ -652,6 +674,7 @@ class ModulePage extends Component
 
         $booking = $this->assignedBookingsQuery()->whereKey($this->quotationBookingId)->firstOrFail();
         abort_unless(in_array($booking->status, ['assigned', 'en_route', 'in_progress'], true), 422, 'Only active jobs can have a quotation.');
+        abort_if($booking->quotation()->where('status', 'approved')->exists(), 409, 'An approved quotation cannot be changed.');
 
         $quotation = Quotation::query()->updateOrCreate(
             ['booking_id' => $booking->id],
@@ -803,6 +826,7 @@ class ModulePage extends Component
             'ratings-reviews' => ['label' => 'Service quality', 'color' => 'violet'],
             'verification-profile' => ['label' => 'Account status', 'color' => 'teal'],
             'notifications' => ['label' => 'Latest updates', 'color' => 'sky'],
+            'messages' => ['label' => 'Support and chats', 'color' => 'blue'],
             'support' => ['label' => 'Help center', 'color' => 'amber'],
             default => abort(404, 'Module not found.'),
         };
@@ -822,6 +846,7 @@ class ModulePage extends Component
             'ratings-reviews' => $this->reviewsContent(),
             'verification-profile' => $this->profileContent(),
             'notifications' => $this->notificationsContent(),
+            'messages' => [],
             'support' => $this->supportContent(),
             default => abort(404, 'Module not found.'),
         };
@@ -831,7 +856,7 @@ class ModulePage extends Component
     private function dashboardContent(): array
     {
         $bookings = $this->assignedBookingsQuery()->latest('bookings.created_at')->limit(50)->get();
-        $incomingRequestsQuery = $this->availableRequestsQuery();
+        $incomingRequestsQuery = $this->rankedRequestsQuery();
         $completed = $bookings->where('status', 'completed');
         $closed = $bookings->whereIn('status', ['completed', 'cancelled', 'no_show'])->count();
         $profile = $this->technicianProfile();
@@ -849,7 +874,7 @@ class ModulePage extends Component
             'activeJob' => $activeJob,
             'verification' => $profile,
             'incomingRequestCount' => (clone $incomingRequestsQuery)->count(),
-            'incomingRequests' => (clone $incomingRequestsQuery)->latest('created_at')->limit(5)->get(),
+            'incomingRequests' => (clone $incomingRequestsQuery)->limit(5)->get(),
             'upcomingJobs' => $bookings->filter(fn (object $booking): bool => $booking->scheduled_at !== null && in_array($booking->status, ['assigned', 'en_route', 'in_progress'], true))->sortBy('scheduled_at')->take(3),
             'recentJobs' => $bookings->take(6),
             'performance' => [
@@ -863,7 +888,7 @@ class ModulePage extends Component
     /** @return array<string, mixed> */
     private function requestsContent(): array
     {
-        $query = $this->availableRequestsQuery();
+        $query = $this->rankedRequestsQuery();
 
         if ($this->requestSearch !== '') {
             $search = '%'.trim($this->requestSearch).'%';
@@ -880,7 +905,7 @@ class ModulePage extends Component
                 ['label' => 'Available requests', 'value' => Number::format((clone $query)->count()), 'icon' => 'queue-list'],
                 ['label' => 'Your availability', 'value' => Str::headline((string) (auth()->user()->availability_status ?? 'offline')), 'icon' => 'bolt'],
             ],
-            'requests' => $query->latest('created_at')->paginate(10, ['*'], 'requestsPage'),
+            'requests' => $query->paginate(10, ['*'], 'requestsPage'),
         ];
     }
 
@@ -1008,15 +1033,19 @@ class ModulePage extends Component
                 ->where('status', 'completed'));
         $total = (clone $payments)->where('payments.status', 'paid')->sum('payments.amount');
         $today = (clone $payments)->where('payments.status', 'paid')->whereDate('payments.paid_at', today())->sum('payments.amount');
+        $walkInPayments = WalkInPayment::query()->whereHas('walkInEntry', fn (Builder $entryQuery): Builder => $entryQuery->where('technician_id', auth()->id()));
+        $walkInTotal = (clone $walkInPayments)->where('status', 'paid')->sum('amount');
+        $walkInToday = (clone $walkInPayments)->where('status', 'paid')->whereDate('paid_at', today())->sum('amount');
 
         return [
             'stats' => [
-                ['label' => 'Total earned', 'value' => '₱'.Number::format((float) $total, 2), 'icon' => 'banknotes'],
-                ['label' => 'Earned today', 'value' => '₱'.Number::format((float) $today, 2), 'icon' => 'calendar-days'],
-                ['label' => 'Paid jobs', 'value' => Number::format((clone $payments)->where('payments.status', 'paid')->count()), 'icon' => 'check-circle'],
-                ['label' => 'Pending payments', 'value' => Number::format((clone $payments)->where('payments.status', 'pending')->count()), 'icon' => 'clock'],
+                ['label' => 'Total earned', 'value' => '₱'.Number::format((float) $total + (float) $walkInTotal, 2), 'icon' => 'banknotes'],
+                ['label' => 'Earned today', 'value' => '₱'.Number::format((float) $today + (float) $walkInToday, 2), 'icon' => 'calendar-days'],
+                ['label' => 'Paid jobs', 'value' => Number::format((clone $payments)->where('payments.status', 'paid')->count() + (clone $walkInPayments)->where('status', 'paid')->count()), 'icon' => 'check-circle'],
+                ['label' => 'Pending payments', 'value' => Number::format((clone $payments)->where('payments.status', 'pending')->count() + (clone $walkInPayments)->where('status', 'pending')->count()), 'icon' => 'clock'],
             ],
             'payments' => $payments->latest('payments.created_at')->paginate(10, ['*'], 'earningsPage'),
+            'walkInPayments' => $walkInPayments->with('walkInEntry')->latest('created_at')->paginate(10, ['*'], 'walkInEarningsPage'),
         ];
     }
 
@@ -1115,10 +1144,14 @@ class ModulePage extends Component
         ];
     }
 
-    private function authorizeTechnician(): void
+    private function authorizeTechnician(bool $requiresActiveAccount = true): void
     {
         $user = auth()->user();
-        abort_unless($user instanceof User && $user->isTechnician() && $user->hasActiveAccount(), 403);
+        $isAllowed = $user instanceof User
+            && $user->isTechnician()
+            && ($user->hasActiveAccount() || (! $requiresActiveAccount && $user->mayAccessTechnicianOnboarding()));
+
+        abort_unless($isAllowed, 403);
     }
 
     /** @param array<int, string> $allowed */
@@ -1155,6 +1188,19 @@ class ModulePage extends Component
         }
 
         return $query;
+    }
+
+    /** @return Builder<Booking> */
+    private function rankedRequestsQuery(): Builder
+    {
+        $query = $this->availableRequestsQuery();
+        $serviceArea = trim((string) auth()->user()?->technicianVerification?->service_area);
+
+        if ($serviceArea !== '') {
+            $query->orderByRaw('CASE WHEN LOWER(address) LIKE ? THEN 0 ELSE 1 END', ['%'.Str::lower($serviceArea).'%']);
+        }
+
+        return $query->oldest('created_at');
     }
 
     private function selectedRequest(): ?Booking

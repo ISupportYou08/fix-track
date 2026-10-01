@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Notifications\BookingStatusChanged;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,6 +37,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class Booking extends Model
 {
+    public const ESTIMATED_DURATION_MINUTES = 120;
+
     public const STATUSES = ['pending', 'matching', 'assigned', 'en_route', 'in_progress', 'completed', 'cancelled', 'no_show'];
 
     public const ACTIVE_STATUSES = ['pending', 'matching', 'assigned', 'en_route', 'in_progress'];
@@ -117,6 +120,12 @@ class Booking extends Model
         return $this->hasOne(Quotation::class);
     }
 
+    /** @return HasOne<BookingChat, $this> */
+    public function chat(): HasOne
+    {
+        return $this->hasOne(BookingChat::class);
+    }
+
     /** @return BelongsTo<ServiceCatalog, $this> */
     public function service(): BelongsTo
     {
@@ -158,6 +167,11 @@ class Booking extends Model
             "A booking cannot move from {$this->status} to {$status}.",
         );
 
+        if ($status === 'completed') {
+            $quotation = $this->quotation()->first();
+            abort_if($quotation !== null && $quotation->status !== 'approved', 422, 'The customer must approve the quotation before this booking can be completed.');
+        }
+
         $fromStatus = $this->status;
         $this->forceFill(['status' => $status])->save();
         $this->statusHistory()->create([
@@ -186,12 +200,26 @@ class Booking extends Model
     {
         abort_unless($this->status === 'completed', 422, 'Only completed bookings can create a payment record.');
 
-        $amount = ServiceCatalog::query()->where('code', $this->service_type)->value('base_price');
+        $quotation = $this->quotation()->first();
+        abort_if($quotation !== null && $quotation->status !== 'approved', 422, 'The quotation must be approved before payment is created.');
+        $amount = $quotation?->total_amount ?? ServiceCatalog::query()->where('code', $this->service_type)->value('base_price');
 
         return $this->payment()->firstOrCreate([], [
             'amount' => $amount !== null ? (float) $amount : 0,
             'status' => 'pending',
             'method' => Payment::METHOD_CASH,
         ]);
+    }
+
+    public static function hasScheduleConflict(int $technicianId, CarbonInterface $scheduledAt, ?int $exceptBookingId = null): bool
+    {
+        return self::query()
+            ->where('assigned_technician_id', $technicianId)
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->whereNotNull('scheduled_at')
+            ->where('scheduled_at', '>', $scheduledAt->copy()->subMinutes(self::ESTIMATED_DURATION_MINUTES))
+            ->where('scheduled_at', '<', $scheduledAt->copy()->addMinutes(self::ESTIMATED_DURATION_MINUTES))
+            ->when($exceptBookingId !== null, fn ($query) => $query->whereKeyNot($exceptBookingId))
+            ->exists();
     }
 }

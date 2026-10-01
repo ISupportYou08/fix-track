@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureTechnicianEmailIsVerified;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
+            'technician.email.verified' => EnsureTechnicianEmailIsVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

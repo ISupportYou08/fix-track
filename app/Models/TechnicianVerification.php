@@ -20,11 +20,15 @@ class TechnicianVerification extends Model
         'years_experience',
         'walk_in_rating',
         'service_area',
+        'service_type',
+        'shop_name',
         'phone',
         'address',
         'risk_flags',
         'reviewer_notes',
         'decision_reason',
+        'resubmission_notes',
+        'resubmission_count',
         'submitted_at',
         'reviewed_at',
     ];
@@ -38,6 +42,7 @@ class TechnicianVerification extends Model
             'walk_in_rating' => 'decimal:2',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'resubmission_count' => 'integer',
         ];
     }
 

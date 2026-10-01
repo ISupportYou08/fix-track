@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 test('each workspace renders only its role-owned relational records', function () {
-    $admin = User::factory()->create(['role' => 'admin']);
+    $admin = User::factory()->create(['role' => 'staff']);
     $customer = User::factory()->create(['role' => 'customer', 'name' => 'Live Customer']);
     $otherCustomer = User::factory()->create(['role' => 'customer', 'name' => 'Other Customer']);
     $technician = User::factory()->create(['role' => 'technician']);
@@ -49,7 +49,7 @@ test('each workspace renders only its role-owned relational records', function (
     $technicianJobs = $this->actingAs($technician)->get(route('technician.module', ['module' => 'my-jobs']))->getContent();
     $technicianEarnings = $this->actingAs($technician)->get(route('technician.module', ['module' => 'earnings']))->getContent();
     $technicianReviews = $this->actingAs($technician)->get(route('technician.module', ['module' => 'ratings-reviews']))->getContent();
-    $adminBookings = $this->actingAs($admin)->get(route('admin.module', ['module' => 'service-bookings']))->getContent();
+    $adminBookings = $this->actingAs($admin)->get(route('staff.module', ['module' => 'service-bookings']))->getContent();
 
     expect($customerBookings)->toContain('LIVE-CUSTOMER-001')->not->toContain('LIVE-OTHER-001')
         ->and($customerPayments)->toContain('1,500.00')->not->toContain('2,200.00')
@@ -61,7 +61,7 @@ test('each workspace renders only its role-owned relational records', function (
 });
 
 test('empty relations do not render generic people or unsupported placeholder metrics', function () {
-    $admin = User::factory()->create(['role' => 'admin']);
+    $admin = User::factory()->create(['role' => 'staff']);
     $customer = User::factory()->create(['role' => 'customer']);
     $booking = Booking::create([
         'user_id' => $customer->id,
@@ -93,7 +93,7 @@ test('empty relations do not render generic people or unsupported placeholder me
     ]);
 
     $customerHtml = $this->actingAs($customer)->get(route('customer.module', ['module' => 'ratings-reviews']))->getContent();
-    $adminHtml = $this->actingAs($admin)->get(route('admin.module', ['module' => 'support-disputes']))->getContent();
+    $adminHtml = $this->actingAs($admin)->get(route('staff.module', ['module' => 'support-disputes']))->getContent();
     $technicianHtml = $this->actingAs(User::factory()->create(['role' => 'technician']))->get(route('technician.module'))->getContent();
 
     expect($customerHtml)->not->toContain('>Technician</td>')

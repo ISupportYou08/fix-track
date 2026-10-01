@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Payment;
+use App\Models\ServiceCatalog;
 use App\Models\TechnicianDocument;
 use App\Models\TechnicianVerification;
 use App\Models\User;
@@ -73,7 +74,7 @@ class RealtimeController extends Controller
         abort_unless($user->hasActiveAccount(), 403);
 
         if (str_starts_with($scope, 'admin-')) {
-            abort_unless($user->isAdmin(), 403);
+            abort_unless($user->canAccessOperationsWorkspace(), 403);
 
             return;
         }
@@ -94,6 +95,7 @@ class RealtimeController extends Controller
                 $this->latestUpdatedAt('bookings'),
                 $this->latestUpdatedAt('payments'),
                 $this->latestUpdatedAt('technician_verifications'),
+                $this->latestUpdatedAt('service_catalog'),
             ]),
             'admin-dispatch-monitor' => $this->latestVersion([
                 $this->latestUpdatedAt('bookings'),
@@ -641,6 +643,7 @@ class RealtimeController extends Controller
         $models = [
             'bookings' => Booking::class,
             'payments' => Payment::class,
+            'service_catalog' => ServiceCatalog::class,
             'technician_verifications' => TechnicianVerification::class,
             'technician_documents' => TechnicianDocument::class,
             'walk_in_entries' => WalkInEntry::class,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\ExpireTechnicianSuspension;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -104,17 +105,35 @@ class GoogleAuthController extends Controller
             }
 
             $user = User::query()->where('google_id', $googleId)->first();
+            $matchedExistingEmail = false;
 
             if (! $user) {
                 $user = User::query()->where('email', $email)->first();
+                $matchedExistingEmail = $user !== null;
             }
 
             if (! $user) {
-                return redirect()->route('register')->withInput([
-                    'name' => data_get($profile, 'name'),
+                $request->session()->put('google_registration', [
+                    'google_id' => $googleId,
                     'email' => $email,
-                ])->withErrors([
-                    'email' => __('No FixTrack account was found for this Google email. Please register first.'),
+                    'name' => Str::of((string) data_get($profile, 'name'))->squish()->limit(255)->toString(),
+                    'first_name' => Str::of((string) data_get($profile, 'given_name'))->squish()->limit(255)->toString(),
+                    'surname' => Str::of((string) data_get($profile, 'family_name'))->squish()->limit(255)->toString(),
+                    'picture' => filter_var(data_get($profile, 'picture'), FILTER_VALIDATE_URL) ?: null,
+                    'expires_at' => now()->addMinutes(15)->getTimestamp(),
+                ]);
+
+                return redirect()->route('auth.google.register.show');
+            }
+
+            if ($user->hasExpiredSuspension()) {
+                app(ExpireTechnicianSuspension::class)->restoreIfExpired($user);
+                $user->refresh();
+            }
+
+            if (! $user->mayUsePublicLogin()) {
+                return redirect()->route('login')->withErrors([
+                    'email' => $this->unavailableAccountMessage($user),
                 ]);
             }
 
@@ -142,6 +161,12 @@ class GoogleAuthController extends Controller
 
             Auth::login($user, remember: true);
             $request->session()->regenerate();
+            $request->session()->flash(
+                'google_status',
+                $matchedExistingEmail
+                    ? __('An account with this email already exists in FixTrack. Google has been linked and you have been signed in.')
+                    : __('This Google account is already registered with FixTrack. You have been signed in.'),
+            );
 
             return redirect()->intended(route('dashboard'));
         } catch (Throwable $exception) {
@@ -160,5 +185,32 @@ class GoogleAuthController extends Controller
         return blank(config('services.google.client_id'))
             || blank(config('services.google.client_secret'))
             || blank(config('services.google.redirect'));
+    }
+
+    private function unavailableAccountMessage(User $user): string
+    {
+        if ($user->account_status === User::ACCOUNT_BANNED) {
+            return __('This FixTrack account has been banned. Contact support if you believe this is a mistake.');
+        }
+
+        if ($user->account_status === 'suspended') {
+            if ($user->suspended_until !== null) {
+                return __('This FixTrack account is suspended until :date.', [
+                    'date' => $user->suspended_until->timezone(config('app.timezone'))->format('F j, Y g:i A'),
+                ]);
+            }
+
+            return __('This FixTrack account is currently suspended. Contact support for assistance.');
+        }
+
+        if ($user->isStaff()) {
+            return __('This email is already registered as a Staff account. Please use the Staff sign-in page.');
+        }
+
+        if ($user->isSuperAdmin()) {
+            return __('This email is already registered as an Administrator account. Please use the Administrator sign-in page.');
+        }
+
+        return __('This email is already registered, but the account cannot use public Google sign-in.');
     }
 }

@@ -5,7 +5,7 @@ test('runtime schema contains the tables and columns used by core workflows', fu
         'users' => [
             'id', 'name', 'email', 'password', 'role', 'account_status', 'availability_status',
             'last_login_at', 'last_seen_at', 'latitude', 'longitude', 'google_id', 'phone',
-            'avatar_path', 'created_at', 'updated_at',
+            'avatar_path', 'first_name', 'middle_name', 'surname', 'created_at', 'updated_at',
         ],
         'bookings' => [
             'id', 'user_id', 'assigned_technician_id', 'reference', 'idempotency_key', 'customer_name',
@@ -25,8 +25,9 @@ test('runtime schema contains the tables and columns used by core workflows', fu
         'walk_in_entries' => ['id', 'user_id', 'technician_id', 'reference', 'queue_number', 'customer_name', 'customer_email', 'customer_phone', 'service_type', 'priority', 'status', 'payment_method', 'counter_id', 'notes', 'checked_in_at', 'called_at', 'service_started_at', 'completed_at', 'cancelled_at', 'cancelled_by', 'cancellation_reason', 'customer_latitude', 'customer_longitude', 'location_sharing_enabled', 'location_updated_at', 'created_at', 'updated_at'],
         'walk_in_status_histories' => ['id', 'walk_in_entry_id', 'from_status', 'to_status', 'actor_id', 'reason', 'metadata', 'created_at'],
         'support_tickets' => ['id', 'reference', 'user_id', 'subject', 'category', 'priority', 'status', 'assigned_to', 'latest_message', 'last_response_at', 'created_at', 'updated_at'],
-        'technician_verifications' => ['id', 'user_id', 'reviewer_id', 'status', 'risk_level', 'service_categories', 'years_experience', 'walk_in_rating', 'service_area', 'phone', 'address', 'risk_flags', 'reviewer_notes', 'decision_reason', 'submitted_at', 'reviewed_at', 'created_at', 'updated_at'],
-        'technician_documents' => ['id', 'verification_id', 'type', 'label', 'status', 'masked_number', 'expires_at', 'created_at', 'updated_at'],
+        'technician_verifications' => ['id', 'user_id', 'reviewer_id', 'status', 'risk_level', 'service_categories', 'years_experience', 'walk_in_rating', 'service_area', 'service_type', 'shop_name', 'phone', 'address', 'risk_flags', 'reviewer_notes', 'decision_reason', 'resubmission_notes', 'resubmission_count', 'submitted_at', 'reviewed_at', 'created_at', 'updated_at'],
+        'email_verification_codes' => ['id', 'user_id', 'code_hash', 'attempts', 'expires_at', 'created_at', 'updated_at'],
+        'technician_documents' => ['id', 'verification_id', 'type', 'label', 'file_path', 'status', 'masked_number', 'expires_at', 'created_at', 'updated_at'],
         'service_counters' => ['id', 'name', 'staff_id', 'status', 'created_at', 'updated_at'],
         'service_catalog' => ['id', 'code', 'name', 'category', 'base_price', 'is_active', 'description', 'created_at', 'updated_at'],
         'platform_settings' => ['id', 'key', 'group', 'label', 'value', 'type', 'created_at', 'updated_at'],

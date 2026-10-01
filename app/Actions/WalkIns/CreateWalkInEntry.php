@@ -15,33 +15,47 @@ class CreateWalkInEntry
     public function execute(User $customer, array $attributes): WalkInEntry
     {
         return DB::transaction(function () use ($customer, $attributes): WalkInEntry {
-            $activeEntries = WalkInEntry::query()
-                ->whereIn('status', WalkInEntry::ACTIVE_STATUSES)
-                ->orderBy('id')
-                ->lockForUpdate()
-                ->get(['id', 'user_id']);
-
-            if ($activeEntries->count() >= WalkInEntry::MAX_ACTIVE) {
-                throw ValidationException::withMessages([
-                    'walkInQueue' => 'Walk-In Queue is currently full. Maximum capacity is 3 customers. Please wait until a slot becomes available.',
-                ]);
-            }
-
-            if ($activeEntries->contains('user_id', $customer->id)) {
+            if (WalkInEntry::query()->where('user_id', $customer->id)->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages([
                     'walkInQueue' => 'You already have an active Walk-In ticket.',
                 ]);
             }
 
             if (empty($attributes['technician_id']) && filled($attributes['service_type'] ?? null)) {
-                $verification = TechnicianVerification::query()
+                $verifications = TechnicianVerification::query()
                     ->where('status', 'approved')
                     ->with('technician')
                     ->get()
-                    ->first(fn (TechnicianVerification $verification): bool => $verification->technician?->hasActiveAccount()
+                    ->filter(fn (TechnicianVerification $verification): bool => $verification->technician?->hasActiveAccount()
                         && $verification->supportsService((string) $attributes['service_type']));
+                $verification = $verifications->first(fn (TechnicianVerification $candidate): bool => WalkInEntry::query()
+                    ->where('technician_id', $candidate->user_id)
+                    ->whereIn('status', WalkInEntry::ACTIVE_STATUSES)
+                    ->count() < WalkInEntry::MAX_ACTIVE);
+
+                if ($verifications->isNotEmpty() && $verification === null) {
+                    throw ValidationException::withMessages(['walkInQueue' => 'All matching walk-in shops are currently full. Please try again later.']);
+                }
 
                 $attributes['technician_id'] = $verification?->user_id;
+            }
+
+            $technicianId = $attributes['technician_id'] ?? null;
+            if ($technicianId !== null) {
+                $technician = User::query()->lockForUpdate()->findOrFail($technicianId);
+                abort_unless($technician->isTechnician() && $technician->hasActiveAccount(), 422, 'This walk-in shop is unavailable.');
+            }
+
+            $activeShopCount = WalkInEntry::query()
+                ->where('technician_id', $technicianId)
+                ->whereIn('status', WalkInEntry::ACTIVE_STATUSES)
+                ->lockForUpdate()
+                ->count();
+
+            if ($activeShopCount >= WalkInEntry::MAX_ACTIVE) {
+                throw ValidationException::withMessages([
+                    'walkInQueue' => 'Walk-In Queue is currently full for this shop. Maximum capacity is 3 customers. Please wait until a slot becomes available.',
+                ]);
             }
 
             $entry = WalkInEntry::query()->create([

@@ -17,6 +17,7 @@ test('demo seeders provide accounts, one hundred services, and five walk-in shop
     ]);
 
     $administrator = User::query()->where('email', 'admin@fixtrack.test')->firstOrFail();
+    $staff = User::query()->where('email', 'staff@fixtrack.test')->firstOrFail();
     $user = User::query()->where('email', 'user@fixtrack.test')->firstOrFail();
     $customer = User::query()->where('email', 'customer@fixtrack.test')->firstOrFail();
     $technician = User::query()->where('email', 'technician@fixtrack.test')->firstOrFail();
@@ -25,12 +26,14 @@ test('demo seeders provide accounts, one hundred services, and five walk-in shop
         ->where('email', 'like', 'technician-%@fixtrack.test')
         ->get();
 
-    expect($administrator->isAdmin())->toBeTrue()
+    expect($administrator->isSuperAdmin())->toBeTrue()
+        ->and($staff->isStaff())->toBeTrue()
         ->and($user->isCustomer())->toBeTrue()
         ->and($customer->isCustomer())->toBeTrue()
         ->and($technician->isTechnician())->toBeTrue()
         ->and($technician->technicianVerification?->status)->toBe('approved')
         ->and(Hash::check('FixTrack123!', $administrator->password))->toBeTrue()
+        ->and(Hash::check('FixTrack123!', $staff->password))->toBeTrue()
         ->and(Hash::check('FixTrack123!', $user->password))->toBeTrue()
         ->and($categoryTechnicians)->toHaveCount(10)
         ->and(ServiceCatalog::query()->where('is_active', true)->count())->toBe(100)

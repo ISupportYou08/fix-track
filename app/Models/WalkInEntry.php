@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Schema;
 
 class WalkInEntry extends Model
 {
@@ -14,6 +16,8 @@ class WalkInEntry extends Model
     use HasFactory;
 
     public const MAX_ACTIVE = 3;
+
+    public const ESTIMATED_MINUTES_PER_CUSTOMER = 30;
 
     public const ACTIVE_STATUSES = ['waiting', 'called', 'serving', 'on_hold'];
 
@@ -101,6 +105,12 @@ class WalkInEntry extends Model
         return $this->hasMany(WalkInStatusHistory::class)->latest('created_at');
     }
 
+    /** @return HasOne<WalkInPayment, $this> */
+    public function payment(): HasOne
+    {
+        return $this->hasOne(WalkInPayment::class);
+    }
+
     public function isActive(): bool
     {
         return in_array($this->status, self::ACTIVE_STATUSES, true);
@@ -113,6 +123,7 @@ class WalkInEntry extends Model
         }
 
         return self::query()
+            ->where('technician_id', $this->technician_id)
             ->whereIn('status', self::ACTIVE_STATUSES)
             ->where(function ($query): void {
                 $query->where('checked_in_at', '<', $this->checked_in_at)
@@ -122,6 +133,13 @@ class WalkInEntry extends Model
                     });
             })
             ->count();
+    }
+
+    public function estimatedWaitMinutes(): ?int
+    {
+        $position = $this->queuePosition();
+
+        return $position !== null ? max(0, $position - 1) * self::ESTIMATED_MINUTES_PER_CUSTOMER : null;
     }
 
     /** @param array<string, mixed> $metadata */
@@ -192,6 +210,21 @@ class WalkInEntry extends Model
             'created_at' => now(),
         ]);
 
+        if ($status === 'completed' && Schema::hasTable('walk_in_payments')) {
+            $this->ensurePayment();
+        }
+
         return true;
+    }
+
+    public function ensurePayment(): WalkInPayment
+    {
+        abort_unless($this->status === 'completed', 422, 'Only completed walk-in tickets can be billed.');
+        $basePrice = ServiceCatalog::query()->where('code', $this->service_type)->value('base_price');
+
+        return $this->payment()->firstOrCreate([], [
+            'amount' => $basePrice !== null ? (float) $basePrice : 0,
+            'status' => 'pending',
+        ]);
     }
 }

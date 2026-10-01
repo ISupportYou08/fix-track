@@ -15,9 +15,12 @@
         data-realtime-interval="{{ $realtimeInterval }}"
     @endif
 >
+    @if ($moduleSlug === 'technician-verification')
+        <x-super-admin.technician-verification :content="$content" :module-state="$moduleState" />
+    @else
     <div class="dashboard-reveal">
         <flux:breadcrumbs>
-            <flux:breadcrumbs.item :href="route('admin.dashboard')" wire:navigate>Super Admin</flux:breadcrumbs.item>
+            <flux:breadcrumbs.item :href="route(auth()->user()->operationsRouteName('dashboard'))" wire:navigate>{{ auth()->user()->isStaff() ? __('Staff') : __('Administrator') }}</flux:breadcrumbs.item>
             <flux:breadcrumbs.item>{{ $module['label'] }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
@@ -65,6 +68,40 @@
             </div>
         @endif
     </div>
+
+    @if ($moduleSlug === 'users-roles')
+        <flux:card class="dashboard-reveal overflow-hidden !border-0 !bg-gradient-to-br !from-slate-950 !via-blue-950 !to-indigo-950 !p-0 text-white shadow-xl" data-admin-user-directory>
+            <div class="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:p-8">
+                <div>
+                    <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-100">
+                        <flux:icon name="shield-check" class="size-4" /> Administrator access
+                    </div>
+                    <flux:heading size="xl" class="!text-white">Manage every FixTrack account</flux:heading>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-blue-100/80">Search customers, technicians, staff, and administrators. Control roles, account access, and active sessions from one directory.</p>
+                </div>
+                <flux:button variant="primary" icon="user-plus" wire:click="openStaffEditor" class="w-full lg:w-auto">
+                    Create staff account
+                </flux:button>
+            </div>
+        </flux:card>
+
+        <div class="dashboard-reveal grid gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-3 dark:border-white/10 dark:bg-zinc-900">
+            <flux:input wire:model.live.debounce.300ms="userSearch" icon="magnifying-glass" placeholder="Search name, email, or phone" aria-label="Search users" />
+            <flux:select wire:model.live="userRoleFilter" aria-label="Filter users by role">
+                <flux:select.option value="all">All roles</flux:select.option>
+                <flux:select.option value="superadmin">Administrators</flux:select.option>
+                <flux:select.option value="staff">Staff</flux:select.option>
+                <flux:select.option value="technician">Technicians</flux:select.option>
+                <flux:select.option value="customer">Customers</flux:select.option>
+            </flux:select>
+            <flux:select wire:model.live="userStatusFilter" aria-label="Filter users by status">
+                <flux:select.option value="all">All account statuses</flux:select.option>
+                <flux:select.option value="active">Active</flux:select.option>
+                <flux:select.option value="suspended">Suspended</flux:select.option>
+                <flux:select.option value="banned">Banned</flux:select.option>
+            </flux:select>
+        </div>
+    @endif
 
     <div class="dashboard-stagger grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($content['stats'] as $stat)
@@ -143,9 +180,9 @@
                         <line x1="42" y1="180" x2="660" y2="180" class="stroke-zinc-200/80 dark:stroke-white/[0.08]" />
                         <line x1="42" y1="108" x2="660" y2="108" class="stroke-zinc-200/60 dark:stroke-white/[0.06]" />
                         <line x1="42" y1="36" x2="660" y2="36" class="stroke-zinc-200/60 dark:stroke-white/[0.06]" />
-                        <text x="26" y="184" text-anchor="end" class="fill-zinc-400 text-[10px] dark:fill-zinc-500">0</text>
-                        <text x="26" y="112" text-anchor="end" class="fill-zinc-400 text-[10px] dark:fill-zinc-500">{{ (int) ceil($content['chart']['maxValue'] / 2) }}</text>
-                        <text x="26" y="40" text-anchor="end" class="fill-zinc-400 text-[10px] dark:fill-zinc-500">{{ $content['chart']['maxValue'] }}</text>
+                        <text x="26" y="184" text-anchor="end" class="fill-zinc-600 text-xs dark:fill-zinc-300">0</text>
+                        <text x="26" y="112" text-anchor="end" class="fill-zinc-600 text-xs dark:fill-zinc-300">{{ (int) ceil($content['chart']['maxValue'] / 2) }}</text>
+                        <text x="26" y="40" text-anchor="end" class="fill-zinc-600 text-xs dark:fill-zinc-300">{{ $content['chart']['maxValue'] }}</text>
                     </g>
 
                     <polygon data-super-admin-analytics-area="active" points="{{ $content['chart']['areas']['active'] }}" class="fill-blue-500 dark:fill-blue-400" fill-opacity="0.09" />
@@ -160,7 +197,7 @@
                         <circle cx="{{ $day['x'] }}" cy="{{ $day['activeY'] }}" r="3" stroke-width="1.5" class="fill-zinc-50 stroke-blue-500 dark:fill-zinc-900 dark:stroke-blue-400" />
                         <circle cx="{{ $day['x'] }}" cy="{{ $day['completedY'] }}" r="3" stroke-width="1.5" class="fill-zinc-50 stroke-emerald-500 dark:fill-zinc-900 dark:stroke-emerald-400" />
                         <circle cx="{{ $day['x'] }}" cy="{{ $day['cancelledY'] }}" r="3" stroke-width="1.5" class="fill-zinc-50 stroke-red-500 dark:fill-zinc-900 dark:stroke-red-400" />
-                        <text x="{{ $day['x'] }}" y="207" text-anchor="middle" class="fill-zinc-400 text-[11px] dark:fill-zinc-500">{{ $day['label'] }}</text>
+                        <text x="{{ $day['x'] }}" y="207" text-anchor="middle" class="fill-zinc-600 text-xs dark:fill-zinc-300">{{ $day['label'] }}</text>
                     @endforeach
                 </svg>
             </div>
@@ -227,20 +264,34 @@
                                             <x-table-actions>
                                                     @switch($section['action'])
                                                         @case('users')
-                                                            <flux:menu.item as="button" type="button" icon="shield-check" wire:click="requestConfirmation('make-admin', {{ $rowId }})">Make admin</flux:menu.item>
-                                                            <flux:menu.item as="button" type="button" icon="wrench-screwdriver" wire:click="requestConfirmation('make-technician', {{ $rowId }})">Make technician</flux:menu.item>
-                                                            <flux:menu.item as="button" type="button" icon="user" wire:click="requestConfirmation('make-customer', {{ $rowId }})">Make customer</flux:menu.item>
-                                                            <flux:menu.item as="button" type="button" icon="check-circle" wire:click="updateUserStatus({{ $rowId }}, 'active')">Activate account</flux:menu.item>
-                                                            <flux:menu.item as="button" type="button" icon="no-symbol" wire:click="requestConfirmation('suspend-user', {{ $rowId }})">Suspend account</flux:menu.item>
-                                                            <flux:menu.separator />
-                                                            <flux:menu.item as="button" type="button" icon="arrow-left-start-on-rectangle" wire:click="requestConfirmation('revoke-user-sessions', {{ $rowId }})">Revoke sessions</flux:menu.item>
+                                                            @if ($rowId !== auth()->id())
+                                                                @if ($row[2] !== 'Staff')
+                                                                    <flux:menu.item as="button" type="button" icon="shield-check" wire:click="requestConfirmation('make-staff', {{ $rowId }})">Make staff</flux:menu.item>
+                                                                @endif
+                                                                @if ($row[2] !== 'Technician')
+                                                                    <flux:menu.item as="button" type="button" icon="wrench-screwdriver" wire:click="requestConfirmation('make-technician', {{ $rowId }})">Make technician</flux:menu.item>
+                                                                @endif
+                                                                @if ($row[2] !== 'Customer')
+                                                                    <flux:menu.item as="button" type="button" icon="user" wire:click="requestConfirmation('make-customer', {{ $rowId }})">Make customer</flux:menu.item>
+                                                                @endif
+                                                                @if ($row[2] === 'Technician')
+                                                                    <flux:menu.item :href="route(auth()->user()->operationsRouteName('module'), ['module' => 'technician-verification', 'filter' => in_array($row[3], ['Review Pending', 'Rejected', 'Email Pending'], true) ? 'pending' : 'verified'])" icon="identification" wire:navigate>Manage technician account</flux:menu.item>
+                                                                @elseif ($row[3] === 'Active')
+                                                                    <flux:menu.item as="button" type="button" icon="no-symbol" wire:click="requestConfirmation('suspend-user', {{ $rowId }})">Suspend account</flux:menu.item>
+                                                                @else
+                                                                    <flux:menu.item as="button" type="button" icon="check-circle" wire:click="requestConfirmation('activate-user', {{ $rowId }})">Reactivate account</flux:menu.item>
+                                                                @endif
+                                                                <flux:menu.separator />
+                                                                <flux:menu.item as="button" type="button" icon="arrow-left-start-on-rectangle" wire:click="requestConfirmation('revoke-user-sessions', {{ $rowId }})">Revoke sessions</flux:menu.item>
+                                                            @else
+                                                                <flux:menu.item icon="shield-check" disabled>Current administrator</flux:menu.item>
+                                                            @endif
                                                             @break
                                                         @case('verification')
                                                             <flux:menu.item as="button" type="button" icon="clock" wire:click="updateVerificationStatus({{ $rowId }}, 'under_review')">Mark under review</flux:menu.item>
                                                             <flux:menu.item as="button" type="button" icon="check-circle" wire:click="requestConfirmation('approve-verification', {{ $rowId }})">Approve verification</flux:menu.item>
                                                             <flux:menu.item as="button" type="button" icon="information-circle" wire:click="requestConfirmation('request-verification-information', {{ $rowId }})">Request information</flux:menu.item>
                                                             <flux:menu.item as="button" type="button" icon="x-circle" wire:click="requestConfirmation('reject-verification', {{ $rowId }})">Reject verification</flux:menu.item>
-                                                            <flux:menu.item as="button" type="button" icon="no-symbol" wire:click="requestConfirmation('suspend-verification', {{ $rowId }})">Suspend verification</flux:menu.item>
                                                             @break
                                                         @case('bookings')
                                                         @case('dispatch-bookings')
@@ -268,6 +319,9 @@
                                                             <flux:menu.item as="button" type="button" icon="check-circle" wire:click="requestConfirmation('mark-payment-paid', {{ $rowId }})">Mark paid</flux:menu.item>
                                                             <flux:menu.item as="button" type="button" icon="arrow-uturn-left" wire:click="requestConfirmation('refund-payment', {{ $rowId }})">Refund payment</flux:menu.item>
                                                             <flux:menu.item as="button" type="button" icon="exclamation-triangle" wire:click="updatePaymentStatus({{ $rowId }}, 'failed')">Mark failed</flux:menu.item>
+                                                            @break
+                                                        @case('walk-in-payments')
+                                                            <flux:menu.item as="button" type="button" icon="banknotes" wire:click="openWalkInCheckout({{ $rowId }})">Record cash</flux:menu.item>
                                                             @break
                                                         @case('reviews')
                                                             <flux:menu.item as="button" type="button" icon="eye" wire:click="updateReviewStatus({{ $rowId }}, 'published')">Publish review</flux:menu.item>
@@ -309,9 +363,37 @@
                         </flux:table.rows>
                     </flux:table>
                 </div>
+                @if ($moduleSlug === 'users-roles' && isset($content['pagination']) && $content['pagination'] !== null)
+                    <div class="mt-4">{{ $content['pagination']->links() }}</div>
+                @endif
             </div>
         @endforeach
     </div>
+
+    @endif
+
+    <flux:modal name="admin-create-staff-modal" class="max-w-lg" @close="cancelStaffEditor" wire:model="showStaffEditor" data-admin-create-staff-modal>
+        <form class="space-y-6" wire:submit="createStaff">
+            <div>
+                <flux:heading size="lg">Create staff account</flux:heading>
+                <flux:text class="mt-1">Staff can use the operations workspace. The account is active and email verified when created.</flux:text>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input wire:model="staffName" label="Full name" autocomplete="name" required />
+                <flux:input wire:model="staffEmail" type="email" label="Work email" autocomplete="email" required />
+                <flux:input wire:model="staffPhone" label="Phone number" placeholder="+639171234567" autocomplete="tel" />
+                <div class="hidden sm:block"></div>
+                <flux:input wire:model="staffPassword" type="password" label="Temporary password" autocomplete="new-password" viewable required />
+                <flux:input wire:model="staffPasswordConfirmation" type="password" label="Confirm password" autocomplete="new-password" viewable required />
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <flux:button type="button" variant="outline" wire:click="cancelStaffEditor">Cancel</flux:button>
+                <flux:button type="submit" variant="primary" icon="user-plus" wire:loading.attr="disabled" wire:target="createStaff">Create staff account</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 
     <flux:modal
         name="super-admin-confirmation-modal"
@@ -328,8 +410,22 @@
 
             @if ($confirmationRequiresReason)
                 <div class="space-y-1.5">
-                    <flux:textarea wire:model="confirmationReason" label="Decision reason" rows="3" placeholder="Explain the decision for the activity history." />
+                    @if (($pendingConfirmation['operation'] ?? null) === 'updateTechnicianAccountStatus')
+                        <flux:textarea wire:model="confirmationReason" :label="($pendingConfirmation['parameters'][1] ?? null) === 'active' ? 'Restoration message' : 'Penalty message'" rows="4" placeholder="Explain this account action clearly to the technician (10–1000 characters)." />
+                    @else
+                        <flux:textarea wire:model="confirmationReason" label="Specific issue or decision reason" rows="4" placeholder="Describe the missing, invalid, or incorrect requirement so the technician knows what to fix." />
+                    @endif
                     @error('reason')
+                        <flux:text class="text-sm text-rose-600 dark:text-rose-400">{{ $message }}</flux:text>
+                    @enderror
+                </div>
+            @endif
+
+            @if (($pendingConfirmation['operation'] ?? null) === 'updateTechnicianAccountStatus' && ($pendingConfirmation['parameters'][1] ?? null) === 'suspended')
+                <div class="space-y-1.5">
+                    <flux:input wire:model="suspensionDays" type="number" min="1" max="365" step="1" label="Suspension duration (days)" placeholder="Enter 1 to 365 days" />
+                    <flux:text class="text-sm">Access resumes automatically after this many full days.</flux:text>
+                    @error('suspension_days')
                         <flux:text class="text-sm text-rose-600 dark:text-rose-400">{{ $message }}</flux:text>
                     @enderror
                 </div>
@@ -413,6 +509,20 @@
                 <flux:text>Keep the customer-facing response and the operational status connected in one update.</flux:text>
             </div>
 
+            @if ($editingSupportTicket)
+                <div class="max-h-56 space-y-2 overflow-y-auto rounded-xl bg-zinc-50 p-3 text-sm dark:bg-white/5">
+                    @forelse ($editingSupportTicket->messages as $message)
+                        <div wire:key="admin-support-message-{{ $message->id }}" class="rounded-lg bg-white p-3 dark:bg-zinc-900">
+                            <div class="font-semibold">{{ $message->sender?->name ?: 'Support' }}</div>
+                            <p class="mt-1 whitespace-pre-wrap">{{ $message->body }}</p>
+                            @if ($message->attachment_path)<a class="mt-1 inline-block text-blue-600 underline" href="{{ route('support.attachment', $message) }}">Download {{ $message->attachment_name }}</a>@endif
+                        </div>
+                    @empty
+                        <p>{{ $editingSupportTicket->latest_message }}</p>
+                    @endforelse
+                </div>
+            @endif
+
             <div class="grid gap-4 sm:grid-cols-2">
                 <flux:select wire:model="supportStatus" label="Status">
                     <flux:select.option value="open">Open</flux:select.option>
@@ -427,13 +537,21 @@
                     <flux:select.option value="urgent">Urgent</flux:select.option>
                 </flux:select>
             </div>
-            <flux:textarea wire:model="supportMessage" label="Latest response" rows="5" placeholder="Add the latest response or internal handoff note." />
+            <flux:textarea wire:model="supportMessage" label="Reply to customer" rows="5" placeholder="Write a response that the customer will see." />
 
             <div class="flex justify-end gap-3">
                 <flux:button variant="outline" wire:click="cancelSupportEditor">Cancel</flux:button>
                 <flux:button variant="primary" wire:click="saveSupportTicket" wire:loading.attr="disabled" wire:target="saveSupportTicket">Save ticket</flux:button>
             </div>
         </div>
+    </flux:modal>
+
+    <flux:modal name="super-admin-walk-in-checkout" class="max-w-md" wire:model="showWalkInCheckout">
+        <form wire:submit="recordWalkInCash" class="space-y-5">
+            <div><flux:heading size="lg">Walk-in cash checkout</flux:heading><flux:text class="mt-1">Enter the final amount received. A receipt becomes available once recorded.</flux:text></div>
+            <flux:input wire:model="checkoutAmount" label="Cash received (PHP)" type="number" min="0.01" step="0.01" required />
+            <div class="flex justify-end gap-2"><flux:button type="button" variant="outline" wire:click="$set('showWalkInCheckout', false)">Cancel</flux:button><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="recordWalkInCash">Record payment</flux:button></div>
+        </form>
     </flux:modal>
 
     <flux:modal

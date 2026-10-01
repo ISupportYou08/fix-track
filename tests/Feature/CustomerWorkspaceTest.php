@@ -47,6 +47,7 @@ test('customers are redirected to their workspace and see customer modules', fun
         ->assertOk()
         ->assertSee('Book a Service')
         ->assertSee('My Bookings')
+        ->assertSee('Top 5 Categories Recommended')
         ->assertSee('Quotations')
         ->assertSee('Ratings &amp; Reviews', false)
         ->assertDontSee('Repository')
@@ -97,7 +98,7 @@ test('customer dashboard shows only the five most-booked services', function () 
     $this->actingAs($customer)
         ->get(route('customer.module'))
         ->assertOk()
-        ->assertSee('Top 5 Popular Services')
+        ->assertSee('Top 5 Categories Recommended')
         ->assertSeeInOrder([
             'Ranked Service One',
             'Ranked Service Two',
@@ -131,6 +132,50 @@ test('customer dashboard prioritizes an active booking over a completed booking'
         ->assertSee('Follow the next step in your home service.')
         ->assertDontSee('This service has been marked completed.')
         ->assertSeeHtml('data-service-progress-step="completed" data-complete="false"');
+});
+
+test('customer dashboard actions open the connected booking flows', function () {
+    $customer = User::factory()->create(['role' => 'customer']);
+
+    Livewire::actingAs($customer)
+        ->test(ModulePage::class, ['module' => 'overview'])
+        ->assertSee('Quick book')
+        ->assertSee('Schedule a visit')
+        ->assertSee('Book a technician')
+        ->assertSee('wire:click="openMobileQuickBook"', false)
+        ->assertSee('wire:click="startBooking"', false)
+        ->call('openMobileQuickBook')
+        ->assertSet('mobileHomeView', 'quick-book')
+        ->assertSet('bookingType', 'quick')
+        ->call('openMobileSchedule')
+        ->assertSet('mobileHomeView', 'schedule')
+        ->assertSet('bookingType', 'scheduled')
+        ->call('startBooking')
+        ->assertSet('moduleSlug', 'book-service')
+        ->call('openBookingFlow', 'quick')
+        ->assertSet('showBookingFlow', true)
+        ->assertSet('bookingFlow', 'quick')
+        ->call('closeBookingFlow')
+        ->call('openWalkInBookingFlow')
+        ->assertSet('showBookingFlow', true)
+        ->assertSet('bookingFlow', 'manual')
+        ->assertSet('manualServiceMode', 'walk-in')
+        ->assertSet('bookingStep', 2);
+});
+
+test('customer dashboard support widget stores a support request', function () {
+    $customer = User::factory()->create(['role' => 'customer']);
+
+    Livewire::actingAs($customer)
+        ->test(ModulePage::class, ['module' => 'overview'])
+        ->set('supportMessage', 'Please help me choose the correct repair service.')
+        ->call('createDashboardSupportTicket')
+        ->assertHasNoErrors();
+
+    expect(DB::table('support_tickets')->where('user_id', $customer->id)->first())
+        ->subject->toBe('Please help me choose the correct repair service.')
+        ->category->toBe('other')
+        ->status->toBe('open');
 });
 
 test('customer module routes expose the migrated customer content', function () {

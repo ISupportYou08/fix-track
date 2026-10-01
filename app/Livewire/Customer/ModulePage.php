@@ -14,6 +14,7 @@ use App\Models\ServiceCatalog;
 use App\Models\SupportTicket;
 use App\Models\User;
 use App\Models\WalkInEntry;
+use App\Models\WalkInPayment;
 use App\Support\QueueTicketPdf;
 use Closure;
 use Flux\Flux;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Number;
 use Illuminate\Support\Sleep;
@@ -38,6 +40,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -47,6 +50,7 @@ use Throwable;
 class ModulePage extends Component
 {
     use HandlesProfilePhoto;
+    use WithFileUploads;
     use WithPagination;
 
     private const CUSTOMER_TIMEZONE = 'Asia/Manila';
@@ -178,6 +182,15 @@ class ModulePage extends Component
 
     public string $supportMessage = '';
 
+    #[Locked]
+    public ?int $selectedSupportTicketId = null;
+
+    public bool $showSupportConversation = false;
+
+    public string $supportReply = '';
+
+    public mixed $supportAttachment = null;
+
     /** @var array<string, bool> */
     private array $tableAvailability = [];
 
@@ -235,6 +248,12 @@ class ModulePage extends Component
                 'icon' => 'bell',
                 'group' => 'Account',
             ],
+            'messages' => [
+                'label' => 'Messages',
+                'description' => 'Chat with the assistant and technicians from accepted bookings.',
+                'icon' => 'chat-bubble-left-right',
+                'group' => 'Account',
+            ],
             'support' => [
                 'label' => 'Support & Help',
                 'description' => 'Ask for help with a booking, payment, or account issue.',
@@ -281,6 +300,9 @@ class ModulePage extends Component
             'selectedWalkInEntry' => $this->selectedWalkInEntry(),
             'cancellingWalkInEntry' => $this->cancellingWalkInEntry(),
             'minimumScheduledAt' => $this->minimumScheduledAt(),
+            'selectedSupportTicket' => $this->selectedSupportTicketId !== null
+                ? SupportTicket::query()->where('user_id', auth()->id())->with('messages.sender:id,name')->findOrFail($this->selectedSupportTicketId)
+                : null,
         ]);
     }
 
@@ -338,6 +360,13 @@ class ModulePage extends Component
         $this->addressSuggestions = [];
         $this->showBookingFlow = true;
         $this->resetValidation();
+    }
+
+    public function openWalkInBookingFlow(): void
+    {
+        $this->openBookingFlow('manual');
+        $this->manualServiceMode = 'walk-in';
+        $this->bookingStep = 2;
     }
 
     public function nextBookingStep(): void
@@ -1096,6 +1125,18 @@ class ModulePage extends Component
                     'You already have an active booking. Complete or cancel it before creating another request.',
                 );
 
+                if ($selectedTechnicianId !== null) {
+                    $technician = User::query()->lockForUpdate()->findOrFail($selectedTechnicianId);
+                    abort_unless($technician->hasActiveAccount(), 409, 'This technician is no longer available.');
+                    $maxActiveJobs = max(1, (int) $this->setting('max_active_jobs'));
+                    abort_if(Booking::query()->where('assigned_technician_id', $technician->id)->whereIn('status', Booking::ACTIVE_STATUSES)->count() >= $maxActiveJobs, 409, 'This technician has reached their active job limit.');
+
+                    if ($validated['scheduledAt'] !== null) {
+                        $scheduledAt = Carbon::createFromFormat('Y-m-d\TH:i', $validated['scheduledAt'], self::CUSTOMER_TIMEZONE);
+                        abort_if(Booking::hasScheduleConflict($technician->id, $scheduledAt), 409, 'This technician has another job within two hours of that schedule.');
+                    }
+                }
+
                 $booking = Booking::create([
                     'user_id' => auth()->id(),
                     'assigned_technician_id' => $selectedTechnicianId,
@@ -1329,15 +1370,21 @@ class ModulePage extends Component
         ])->validate()['status'];
         abort_unless($this->tableExists('quotations'), 422, 'Quotations are not available yet.');
 
-        $quotation = Quotation::query()
-            ->whereKey($quotationId)
-            ->whereHas('booking', fn (Builder $query): Builder => $query->whereBelongsTo(auth()->user(), 'customer'))
-            ->firstOrFail();
-        abort_unless($quotation->status === 'awaiting_approval', 409, 'This quotation has already been answered.');
-        $quotation->update([
-            'status' => $validatedStatus,
-            'responded_at' => now(),
-        ]);
+        $quotation = DB::transaction(function () use ($quotationId, $validatedStatus): Quotation {
+            $booking = $this->customerBookingsQuery()
+                ->whereHas('quotation', fn (Builder $query): Builder => $query->whereKey($quotationId))
+                ->lockForUpdate()
+                ->firstOrFail();
+            abort_unless(in_array($booking->status, Booking::ACTIVE_STATUSES, true), 409, 'This booking is no longer active.');
+            $quotation = $booking->quotation()->lockForUpdate()->firstOrFail();
+            abort_unless($quotation->status === 'awaiting_approval', 409, 'This quotation has already been answered.');
+            $quotation->update([
+                'status' => $validatedStatus,
+                'responded_at' => now(),
+            ]);
+
+            return $quotation;
+        });
 
         $this->recordAudit('customer.quotation_responded', 'quotation', $quotation->id, ['status' => $validatedStatus]);
         $this->successToast($validatedStatus === 'approved' ? 'Quotation approved.' : 'Quotation declined.');
@@ -1550,10 +1597,82 @@ class ModulePage extends Component
 
         abort_unless($ticket instanceof SupportTicket, 409, 'Support is busy. Please try again.');
 
+        $ticket->messages()->create([
+            'sender_id' => auth()->id(),
+            'body' => $validated['message'],
+        ]);
+
         $this->recordAudit('customer.support_ticket_created', 'support_ticket', $ticket->id);
         $this->supportSubject = '';
         $this->supportMessage = '';
         $this->successToast('Support request submitted.');
+    }
+
+    public function openSupportConversation(int $ticketId): void
+    {
+        $this->authorizeCustomer();
+        $ticket = SupportTicket::query()->where('user_id', auth()->id())->findOrFail($ticketId);
+        $this->selectedSupportTicketId = $ticket->id;
+        $this->showSupportConversation = true;
+        $this->supportReply = '';
+        $this->supportAttachment = null;
+    }
+
+    public function closeSupportConversation(): void
+    {
+        $this->selectedSupportTicketId = null;
+        $this->showSupportConversation = false;
+        $this->supportReply = '';
+        $this->supportAttachment = null;
+    }
+
+    public function replyToSupportTicket(): void
+    {
+        $this->authorizeCustomer();
+        abort_unless($this->selectedSupportTicketId !== null, 422);
+        $validated = Validator::make([
+            'body' => trim($this->supportReply),
+            'attachment' => $this->supportAttachment,
+        ], [
+            'body' => ['required', 'string', 'max:5000'],
+            'attachment' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'mimetypes:image/jpeg,image/png,application/pdf', 'max:5120'],
+        ])->validate();
+
+        $ticket = SupportTicket::query()->where('user_id', auth()->id())->findOrFail($this->selectedSupportTicketId);
+        abort_unless($ticket->status !== 'closed', 409, 'This support request is closed. Start a new request if you need more help.');
+        $path = isset($validated['attachment'])
+            ? $validated['attachment']->store("support-attachments/{$ticket->id}", 'local')
+            : null;
+
+        try {
+            DB::transaction(function () use ($ticket, $validated, $path): void {
+                $ticket->messages()->create([
+                    'sender_id' => auth()->id(),
+                    'body' => $validated['body'],
+                    'attachment_path' => $path,
+                    'attachment_name' => isset($validated['attachment']) ? $validated['attachment']->getClientOriginalName() : null,
+                ]);
+                $ticket->update(['latest_message' => $validated['body'], 'status' => 'open']);
+            });
+        } catch (Throwable $exception) {
+            if ($path !== null) {
+                Storage::disk('local')->delete($path);
+            }
+            throw $exception;
+        }
+
+        $this->supportReply = '';
+        $this->supportAttachment = null;
+        $this->successToast('Reply sent to support.');
+    }
+
+    public function createDashboardSupportTicket(): void
+    {
+        $this->supportSubject = Str::limit(trim($this->supportMessage), 80, '');
+        $this->supportCategory = 'other';
+        $this->supportPriority = 'normal';
+
+        $this->createSupportTicket();
     }
 
     /** @return array{label: string, color: string} */
@@ -1568,6 +1687,7 @@ class ModulePage extends Component
             'payments' => ['label' => 'Payment history', 'color' => 'emerald'],
             'ratings-reviews' => ['label' => 'Your feedback', 'color' => 'violet'],
             'notifications' => ['label' => 'Latest updates', 'color' => 'sky'],
+            'messages' => ['label' => 'Your conversations', 'color' => 'blue'],
             'support' => ['label' => 'Help center', 'color' => 'amber'],
             'settings' => ['label' => 'Account preferences', 'color' => 'zinc'],
             default => abort(404, 'Module not found.'),
@@ -1586,6 +1706,7 @@ class ModulePage extends Component
             'payments' => $this->paymentsContent(),
             'ratings-reviews' => $this->reviewsContent(),
             'notifications' => $this->notificationsContent(),
+            'messages' => [],
             'support' => $this->supportContent(),
             'settings' => $this->settingsContent(),
             default => abort(404, 'Module not found.'),
@@ -1631,6 +1752,8 @@ class ModulePage extends Component
             'recentBookings' => $bookings,
             'upcomingBookings' => $this->customerBookingsWithTechnicianQuery()->whereNotNull('bookings.scheduled_at')->where('bookings.scheduled_at', '>=', now())->whereNotIn('bookings.status', ['completed', 'cancelled', 'no_show'])->orderBy('bookings.scheduled_at')->limit(3)->get(),
             'popularServices' => $this->popularServices(),
+            'services' => $this->serviceCatalog(),
+            'countryCallingCodes' => $this->countryCallingCodes(),
         ];
     }
 
@@ -1698,15 +1821,9 @@ class ModulePage extends Component
         }
 
         $query = $this->customerWalkInEntriesQuery();
-        $activeEntries = WalkInEntry::query()
-            ->whereIn('status', WalkInEntry::ACTIVE_STATUSES)
-            ->orderBy('checked_in_at')
-            ->orderBy('id')
-            ->get(['id']);
-        $positions = $activeEntries->pluck('id')->flip()->map(static fn (int $index): int => $index + 1);
         $entries = $query->latest('checked_in_at')->paginate(10, ['*'], 'walkInPage');
-        $entries->getCollection()->each(function (WalkInEntry $entry) use ($positions): void {
-            $entry->setAttribute('queue_position', $positions->get($entry->id));
+        $entries->getCollection()->each(function (WalkInEntry $entry): void {
+            $entry->setAttribute('queue_position', $entry->queuePosition());
         });
 
         return [
@@ -1719,8 +1836,8 @@ class ModulePage extends Component
             'services' => $this->serviceCatalog(),
             'available' => true,
             'message' => '',
-            'activeCount' => $activeEntries->count(),
-            'availableSlots' => max(0, WalkInEntry::MAX_ACTIVE - $activeEntries->count()),
+            'activeCount' => WalkInEntry::query()->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->count(),
+            'availableSlots' => WalkInEntry::MAX_ACTIVE,
             'capacity' => WalkInEntry::MAX_ACTIVE,
         ];
     }
@@ -1770,14 +1887,16 @@ class ModulePage extends Component
         }
 
         $query = $this->customerPaymentsQuery();
+        $walkInPayments = WalkInPayment::query()->whereHas('walkInEntry', fn (Builder $entryQuery): Builder => $entryQuery->where('user_id', auth()->id()));
 
         return [
             'stats' => [
-                ['label' => 'Total paid', 'value' => '₱'.Number::format((float) (clone $query)->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', 'completed'))->where('payments.status', 'paid')->sum('payments.amount'), 2), 'icon' => 'banknotes'],
-                ['label' => 'Paid records', 'value' => Number::format((clone $query)->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', 'completed'))->where('payments.status', 'paid')->count()), 'icon' => 'check-circle'],
-                ['label' => 'Pending', 'value' => Number::format((clone $query)->where('payments.status', 'pending')->count()), 'icon' => 'clock'],
+                ['label' => 'Total paid', 'value' => '₱'.Number::format((float) (clone $query)->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', 'completed'))->where('payments.status', 'paid')->sum('payments.amount') + (float) (clone $walkInPayments)->where('status', 'paid')->sum('amount'), 2), 'icon' => 'banknotes'],
+                ['label' => 'Paid records', 'value' => Number::format((clone $query)->whereHas('booking', fn (Builder $bookingQuery): Builder => $bookingQuery->where('status', 'completed'))->where('payments.status', 'paid')->count() + (clone $walkInPayments)->where('status', 'paid')->count()), 'icon' => 'check-circle'],
+                ['label' => 'Pending', 'value' => Number::format((clone $query)->where('payments.status', 'pending')->count() + (clone $walkInPayments)->where('status', 'pending')->count()), 'icon' => 'clock'],
             ],
             'payments' => $query->latest('payments.created_at')->paginate(10, ['*'], 'paymentsPage'),
+            'walkInPayments' => $walkInPayments->with('walkInEntry')->latest('created_at')->paginate(10, ['*'], 'walkInPaymentsPage'),
         ];
     }
 
@@ -1957,6 +2076,7 @@ class ModulePage extends Component
         }
 
         $entry = $this->customerWalkInEntriesQuery()
+            ->with('payment')
             ->whereKey($this->selectedWalkInEntryId)
             ->first();
 

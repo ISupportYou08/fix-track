@@ -1,8 +1,11 @@
 <?php
 
+use App\Actions\ExpireTechnicianSuspension;
+use App\Models\PendingTechnicianRegistration;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Support\Facades\Storage;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -46,4 +49,22 @@ Artisan::command('schema:check', function (): int {
     return 1;
 })->purpose('Fail when the database is behind the migration files');
 
+Artisan::command('technicians:expire-suspensions', function (): void {
+    $count = app(ExpireTechnicianSuspension::class)->restoreDue();
+    $this->info("Restored {$count} expired technician suspension(s).");
+})->purpose('Restore technician accounts whose suspension period has ended');
+
+Schedule::command('technicians:expire-suspensions')->everyMinute()->withoutOverlapping();
+
 Schedule::command('walk-ins:expire-stale')->hourly();
+
+Schedule::call(function (): void {
+    PendingTechnicianRegistration::query()
+        ->where('registration_expires_at', '<=', now())
+        ->chunkById(100, function ($registrations): void {
+            foreach ($registrations as $registration) {
+                Storage::disk('local')->delete(array_values($registration->payload['paths'] ?? []));
+                $registration->delete();
+            }
+        });
+})->hourly();

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create your Account - FixTrack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Base pastel gradient mimicking the reference image */
+            background: linear-gradient(135deg, #f3e6fa 0%, #d4e8f9 50%, #b8eaf8 100%);
+            margin: 0;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Simulating the tech wireframe/spirograph geometric lines */
+        .geometric-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                repeating-linear-gradient(30deg, transparent, transparent 40px, rgba(255,255,255,0.4) 40px, rgba(255,255,255,0.4) 41px),
+                repeating-linear-gradient(-30deg, transparent, transparent 40px, rgba(255,255,255,0.4) 40px, rgba(255,255,255,0.4) 41px),
+                repeating-linear-gradient(60deg, transparent, transparent 80px, rgba(255,255,255,0.3) 80px, rgba(255,255,255,0.3) 81px),
+                repeating-linear-gradient(-60deg, transparent, transparent 80px, rgba(255,255,255,0.3) 80px, rgba(255,255,255,0.3) 81px);
+            /* Soft blur to blend the lines nicely into the pastel background */
+            filter: drop-shadow(0 0 1px rgba(255,255,255,0.8));
+        }
+
+        /* Glassmorphism utility for the main tech container */
+        .glass-container {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        /* Custom styles for the toast notification animation */
+        #toast {
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0s, opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transform: translateY(20px);
+        }
+        #toast.show {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Smooth transition for card interactions */
+        .card-btn {
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                        background-color 0.2s ease,
+                        box-shadow 0.2s ease,
+                        border-color 0.2s ease;
+        }
+    </style>
+</head>
+
+<body class="flex items-center justify-center p-4 md:p-8">
+
+    <!-- Decorative geometric background layer -->
+    <div class="geometric-lines"></div>
+
+    <!-- The main wrapper styled as a tech-glass container with a dark 2px border -->
+    <main class="w-full max-w-4xl mx-auto text-center px-6 py-12 md:px-12 md:py-16 glass-container border-2 border-slate-900 rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.15)] relative z-10">
+
+        <div class="flex justify-center mb-6">
+            <!-- Stylized 'F' Logo -->
+            <div class="bg-white p-3 rounded-2xl shadow-lg border border-gray-100">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 30V10C14 8.89543 14.8954 8 16 8H28C29.1046 8 30 8.89543 30 10V12C30 13.1046 29.1046 14 28 14H20V17H26C27.1046 17 28 17.8954 28 19V21C28 22.1046 27.1046 23 26 23H20V30C20 31.1046 19.1046 32 18 32H16C14.8954 32 14 31.1046 14 30Z" fill="#1d4ed8" />
+                    <path d="M20 23V25C20 26.1046 20.8954 27 22 27H26C27.1046 27 28 26.1046 28 25V23H20Z" fill="#60a5fa" />
+                </svg>
+            </div>
+        </div>
+
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-3 drop-shadow-sm">Create your account</h1>
+        <p class="text-base text-slate-700 mb-12 font-medium">Choose how you will use FixTrack.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+
+            <!-- Customer Card -->
+            <button id="card-Customer" onclick="handleRoleSelection('Customer')" class="card-btn w-full flex flex-col items-center justify-center p-10 bg-white border-2 border-transparent rounded-3xl shadow-xl hover:-translate-y-1 hover:shadow-2xl focus:outline-none text-center group">
+                <div class="w-20 h-20 flex items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors mb-6 shadow-sm group-hover:scale-105 duration-300">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Customer</h2>
+                <p class="text-sm text-gray-500 max-w-[180px] mx-auto">Book and track home services easily.</p>
+            </button>
+
+            <!-- Technician Card -->
+            <button id="card-Technician" onclick="handleRoleSelection('Technician')" class="card-btn w-full flex flex-col items-center justify-center p-10 bg-white border-2 border-transparent rounded-3xl shadow-xl hover:-translate-y-1 hover:shadow-2xl focus:outline-none text-center group">
+                <div class="w-20 h-20 flex items-center justify-center rounded-2xl bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors mb-6 shadow-sm group-hover:scale-105 duration-300">
+                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Technician</h2>
+                <p class="text-sm text-gray-500 max-w-[180px] mx-auto">Apply to receive service jobs near you.</p>
+            </button>
+
+        </div>
+    </main>
+
+    <!-- Custom Toast Notification -->
+    <div id="toast" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center space-x-3 z-50 pointer-events-none border border-slate-700">
+        <svg class="w-5 h-5 text-cyan-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        <span id="toast-message" class="text-sm font-medium tracking-wide"></span>
+    </div>
+
+    <script>
+        function handleRoleSelection(role) {
+            // Get references to elements
+            const clickedCard = document.getElementById(`card-${role}`);
+            const otherRole = role === 'Customer' ? 'Technician' : 'Customer';
+            const otherCard = document.getElementById(`card-${otherRole}`);
+
+            // Base styles for unselected cards
+            const baseClasses = "card-btn w-full flex flex-col items-center justify-center p-10 bg-white border-2 border-transparent rounded-3xl shadow-xl hover:-translate-y-1 hover:shadow-2xl focus:outline-none text-center group";
+
+            // 1. Reset both cards
+            [clickedCard, otherCard].forEach(card => {
+                card.className = baseClasses;
+            });
+
+            // 2. Apply active "pressed" styling to clicked card
+            // - scale-95 (press effect)
+            // - inset shadow (looks pressed inward)
+            // - light blue-to-cyan gradient background
+            // - cyan border
+            clickedCard.className = "card-btn w-full flex flex-col items-center justify-center p-10 rounded-3xl text-center group " +
+                                    "scale-95 shadow-[inset_0_10px_25px_rgba(0,0,0,0.1)] border-2 border-cyan-400 " +
+                                    "bg-gradient-to-br from-blue-50 to-cyan-100 outline-none";
+
+            // 3. Trigger Toast Notification
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+
+            toastMessage.textContent = `Redirecting to ${role} registration...`;
+            toast.classList.add('show');
+
+            // Hide toast after 3 seconds to simulate page transition
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

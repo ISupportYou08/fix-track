@@ -45,18 +45,19 @@ function approvedTechnician(User $technician): void
     ]);
 }
 
-test('workspace routes enforce the three role boundaries and admin roles redirect correctly', function () {
-    $admin = User::factory()->create(['role' => 'admin']);
+test('workspace routes enforce role boundaries and staff redirects correctly', function () {
+    $staff = User::factory()->create(['role' => 'staff']);
     $technician = User::factory()->create(['role' => 'technician']);
     $customer = User::factory()->create(['role' => 'customer']);
 
-    $this->actingAs($admin)
+    $this->actingAs($staff)
         ->get(route('dashboard'))
-        ->assertRedirect(route('admin.dashboard'));
+        ->assertRedirect(route('staff.dashboard'));
 
-    $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
-    $this->actingAs($admin)->get(route('technician.module'))->assertForbidden();
-    $this->actingAs($admin)->get(route('customer.module'))->assertForbidden();
+    $this->actingAs($staff)->get(route('staff.dashboard'))->assertOk();
+    $this->actingAs($staff)->get(route('admin.dashboard'))->assertForbidden();
+    $this->actingAs($staff)->get(route('technician.module'))->assertForbidden();
+    $this->actingAs($staff)->get(route('customer.module'))->assertForbidden();
 
     $this->actingAs($technician)->get(route('admin.dashboard'))->assertForbidden();
     $this->actingAs($technician)->get(route('customer.module'))->assertForbidden();

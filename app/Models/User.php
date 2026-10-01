@@ -21,19 +21,23 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 /**
  * @property int $id
  * @property string $name
+ * @property string|null $first_name
+ * @property string|null $middle_name
+ * @property string|null $surname
  * @property string $email
  * @property string|null $google_id
  * @property string|null $avatar_path
  * @property string|null $phone
  * @property string|null $address
  * @property string|null $account_status
+ * @property Carbon|null $suspended_until
  * @property string|null $availability_status
  * @property Carbon|null $last_login_at
  * @property Carbon|null $last_seen_at
  * @property string|float|null $latitude
  * @property string|float|null $longitude
  * @property Carbon|null $email_verified_at
- * @property string $password
+ * @property string|null $password
  * @property string $role
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -43,10 +47,18 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  * @property int $active_jobs_count
  */
-#[Fillable(['name', 'email', 'google_id', 'password', 'role', 'phone', 'address', 'avatar_path', 'account_status', 'last_login_at', 'availability_status', 'last_seen_at', 'latitude', 'longitude'])]
+#[Fillable(['name', 'first_name', 'middle_name', 'surname', 'email', 'google_id', 'password', 'role', 'phone', 'address', 'avatar_path', 'account_status', 'suspended_until', 'last_login_at', 'availability_status', 'last_seen_at', 'latitude', 'longitude'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
+    public const ACCOUNT_EMAIL_PENDING = 'email_pending';
+
+    public const ACCOUNT_REVIEW_PENDING = 'review_pending';
+
+    public const ACCOUNT_REJECTED = 'rejected';
+
+    public const ACCOUNT_BANNED = 'banned';
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
@@ -61,6 +73,7 @@ class User extends Authenticatable implements PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'last_login_at' => 'datetime',
+            'suspended_until' => 'datetime',
             'last_seen_at' => 'datetime',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
@@ -97,7 +110,31 @@ class User extends Authenticatable implements PasskeyUser
 
     public function isAdmin(): bool
     {
-        return in_array($this->role, ['superadmin', 'admin'], true);
+        return $this->isSuperAdmin();
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->role === 'staff';
+    }
+
+    public function canAccessOperationsWorkspace(): bool
+    {
+        return $this->isAdmin() || $this->isStaff();
+    }
+
+    public function operationsRouteName(string $route): string
+    {
+        return ($this->isStaff() ? 'staff' : 'admin').'.'.$route;
+    }
+
+    public function roleLabel(): string
+    {
+        return match ($this->role) {
+            'superadmin' => 'Administrator',
+            'staff' => 'Staff',
+            default => Str::headline($this->role),
+        };
     }
 
     public function isTechnician(): bool
@@ -113,6 +150,33 @@ class User extends Authenticatable implements PasskeyUser
     public function hasActiveAccount(): bool
     {
         return (string) ($this->account_status ?? 'active') === 'active';
+    }
+
+    public function mayAccessTechnicianOnboarding(): bool
+    {
+        return $this->isTechnician() && in_array((string) $this->account_status, [
+            self::ACCOUNT_EMAIL_PENDING,
+            self::ACCOUNT_REVIEW_PENDING,
+            self::ACCOUNT_REJECTED,
+        ], true);
+    }
+
+    public function mayUsePublicLogin(): bool
+    {
+        return ! $this->canAccessOperationsWorkspace() && ($this->hasActiveAccount() || $this->mayAccessTechnicianOnboarding());
+    }
+
+    public function hasExpiredSuspension(): bool
+    {
+        return $this->isTechnician()
+            && $this->account_status === 'suspended'
+            && $this->suspended_until?->isPast() === true;
+    }
+
+    /** @return HasOne<EmailVerificationCode, $this> */
+    public function emailVerificationCode(): HasOne
+    {
+        return $this->hasOne(EmailVerificationCode::class);
     }
 
     /** @return HasMany<Booking, $this> */

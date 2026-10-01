@@ -30,6 +30,10 @@
                     </button>
                     @auth
                         <a href="{{ route('dashboard') }}" class="inline-flex min-h-10 items-center rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-violet-700 dark:bg-white dark:text-zinc-950 dark:hover:bg-violet-200">Dashboard</a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" data-test="home-logout" class="inline-flex min-h-10 items-center px-3 text-sm font-semibold text-zinc-700 hover:text-violet-700 dark:text-zinc-200 dark:hover:text-violet-300">Sign out</button>
+                        </form>
                     @else
                         <a data-test="home-login" href="{{ route('login') }}" class="hidden min-h-10 items-center px-3 text-sm font-semibold text-zinc-700 hover:text-violet-700 dark:text-zinc-200 dark:hover:text-violet-300 sm:inline-flex">Log in</a>
                         <a data-test="home-register" href="{{ route('register') }}" class="inline-flex min-h-10 items-center rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-violet-700">Register</a>

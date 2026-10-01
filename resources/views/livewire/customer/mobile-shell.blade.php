@@ -307,7 +307,7 @@
                     <button type="button" wire:key="mobile-schedule-store-{{ $technicianStore->id }}" wire:click="selectMobileTechnicianStore({{ $technicianStore->id }})" class="flex w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-3 text-start shadow-sm transition hover:border-violet-300 hover:bg-violet-50/50 dark:border-white/10 dark:bg-zinc-900 dark:hover:bg-violet-500/10">
                         <span class="flex size-11 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">{{ $technicianStore->initials() }}</span>
                         <span class="min-w-0 flex-1"><span class="block truncate font-semibold text-zinc-900 dark:text-white">{{ $technicianStore->name }} Service Store</span><span class="mt-0.5 block truncate text-sm text-zinc-500">{{ \Illuminate\Support\Str::limit($technicianStore->technicianVerification->address, 60) }}</span></span>
-                        <span class="flex shrink-0 flex-col items-end gap-1"><span class="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Verified</span><flux:icon name="chevron-right" class="size-5 text-zinc-400" /></span>
+                        <span class="flex shrink-0 flex-col items-end gap-1"><span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Verified</span><flux:icon name="chevron-right" class="size-5 text-zinc-400" /></span>
                     </button>
                 @empty
                     <div class="rounded-2xl border border-dashed border-zinc-300 px-5 py-14 text-center dark:border-zinc-700"><flux:icon name="building-storefront" class="mx-auto size-9 text-zinc-400" /><flux:heading size="lg" class="mt-4">{{ $mobileTechnicianStoreSearch !== '' ? 'No matching technician stores' : 'No technician stores yet' }}</flux:heading><flux:text class="mt-1 text-zinc-500">{{ $mobileTechnicianStoreSearch !== '' ? 'Try another store name or address.' : 'Verified technicians with a registered store address will appear here.' }}</flux:text></div>
@@ -417,7 +417,7 @@
             <div class="grid grid-cols-3 gap-2">
                 @foreach ($content['stats'] as $stat)
                     <div class="rounded-xl border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
-                        <div class="truncate text-[10px] font-medium uppercase tracking-wide text-zinc-500">{{ $stat['label'] }}</div>
+                        <div class="truncate text-xs font-medium uppercase tracking-wide text-zinc-500">{{ $stat['label'] }}</div>
                         <div class="mt-1 truncate text-sm font-semibold text-zinc-900 dark:text-white">{{ $stat['value'] }}</div>
                     </div>
                 @endforeach
@@ -447,21 +447,25 @@
                     <div class="rounded-2xl border border-dashed border-zinc-300 px-5 py-14 text-center dark:border-zinc-700"><flux:icon name="banknotes" class="mx-auto size-9 text-zinc-400" /><flux:heading size="lg" class="mt-4">No cash payments yet</flux:heading><flux:text class="mt-1 text-zinc-500">Cash payment records will appear after a completed service.</flux:text></div>
                 @endforelse
             </div>
+            <div class="space-y-2"><h2 class="text-sm font-semibold">Walk-in payments</h2>@foreach ($content['walkInPayments'] as $walkInPayment)<div wire:key="mobile-walk-in-payment-{{ $walkInPayment->id }}" class="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900"><div class="flex justify-between gap-3"><span>{{ $walkInPayment->walkInEntry?->queue_number }}</span><strong>₱{{ number_format((float) $walkInPayment->amount, 2) }}</strong></div><div class="mt-2 flex justify-between text-xs text-zinc-500"><span>{{ ucfirst($walkInPayment->status) }}</span>@if ($walkInPayment->status === 'paid')<a class="text-blue-600 underline" href="{{ route('walk-ins.receipt', ['entry' => $walkInPayment->walk_in_entry_id]) }}">Receipt</a>@endif</div></div>@endforeach</div>
         @else
             <div class="rounded-2xl border border-dashed border-zinc-300 px-5 py-14 text-center dark:border-zinc-700"><flux:heading size="lg">Activity</flux:heading><flux:text class="mt-1 text-zinc-500">Your latest service activity will appear here.</flux:text></div>
         @endif
     @elseif ($tab === 'messages')
+        @if ($moduleSlug === 'messages')
+            <livewire:booking-messenger :key="'customer-mobile-messages'" />
+        @else
         <header class="flex items-end justify-between gap-4">
             <div>
                 <flux:text class="text-sm text-zinc-500">Stay up to date</flux:text>
-                <flux:heading size="xl" class="mt-1 tracking-tight">Messages</flux:heading>
+                <flux:heading size="xl" class="mt-1 tracking-tight">{{ $moduleSlug === 'support' ? 'Support' : 'Updates' }}</flux:heading>
             </div>
-            <a href="{{ route('customer.module', ['module' => 'support']) }}" wire:navigate class="flex size-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 dark:bg-white/10 dark:text-white" aria-label="Contact support"><flux:icon name="plus" class="size-5" /></a>
+            <a href="{{ route('customer.module', ['module' => 'messages']) }}" wire:navigate class="flex size-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-800 dark:bg-white/10 dark:text-white" aria-label="Open conversations"><flux:icon name="chat-bubble-left-right" class="size-5" /></a>
         </header>
 
         <div class="flex items-center gap-1 rounded-xl bg-zinc-100 p-1 text-sm dark:bg-white/10">
-            <span class="flex-1 rounded-lg bg-white px-3 py-2 text-center font-semibold text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white">Updates</span>
-            <a href="{{ route('customer.module', ['module' => 'support']) }}" wire:navigate class="flex-1 px-3 py-2 text-center font-medium text-zinc-500">Support</a>
+            <a href="{{ route('customer.module', ['module' => 'notifications']) }}" wire:navigate class="flex-1 rounded-lg px-3 py-2 text-center font-medium {{ $moduleSlug === 'notifications' ? 'bg-white font-semibold text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-zinc-500' }}">Updates</a>
+            <a href="{{ route('customer.module', ['module' => 'support']) }}" wire:navigate class="flex-1 rounded-lg px-3 py-2 text-center font-medium {{ $moduleSlug === 'support' ? 'bg-white font-semibold text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-zinc-500' }}">Support</a>
         </div>
 
         <div class="space-y-2">
@@ -482,6 +486,7 @@
                 @endforelse
             @endif
         </div>
+        @endif
     @elseif ($tab === 'account')
         <x-profile-photo-editor :user="$mobileUser" :pending-photo="$profilePhoto" input-id="customer-profile-photo" />
 

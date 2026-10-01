@@ -22,7 +22,13 @@ class DemoAccountsSeeder extends Seeder
             [
                 'name' => 'Sample Administrator',
                 'email' => 'admin@fixtrack.test',
-                'role' => 'admin',
+                'role' => 'superadmin',
+                'phone' => '+639170000000',
+            ],
+            [
+                'name' => 'Sample Staff',
+                'email' => 'staff@fixtrack.test',
+                'role' => 'staff',
                 'phone' => '+639170000001',
             ],
             [

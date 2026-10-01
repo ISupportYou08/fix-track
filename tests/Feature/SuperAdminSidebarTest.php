@@ -6,31 +6,70 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
-test('super admins see every super admin sidebar module', function () {
+test('super admins see the selected sidebar modules', function () {
     $superAdmin = User::factory()->create(['role' => 'superadmin']);
 
     $response = $this->actingAs($superAdmin)->get(route('admin.dashboard'));
 
     $response->assertOk();
 
-    foreach ([
-        'Dashboard',
-        'System Health',
-        'Users & Roles',
-        'Technician Verification',
-        'Service Bookings',
-        'Dispatch Monitor',
-        'Walk-in Queue',
-        'Payments & Revenue',
-        'Ratings & Reviews',
-        'Reports & Analytics',
-        'Support & Disputes',
-        'Audit Logs',
-        'Service Catalog',
-        'Platform Settings',
-    ] as $module) {
-        $response->assertSee($module);
+    foreach (['dashboard', 'users-roles', 'technician-verification', 'service-bookings', 'dispatch-monitor', 'walk-in-queue', 'payments-revenue', 'ratings-reviews', 'reports-analytics', 'support-disputes', 'service-catalog', 'audit-logs', 'system-health', 'platform-settings'] as $module) {
+        $response->assertSee('data-super-admin-sidebar-item="'.$module.'"', false);
     }
+
+    $response->assertSee('All Users');
+});
+
+test('operations sidebar uses the reference sections and working footer links', function (string $role) {
+    $operationsUser = User::factory()->create(['role' => $role, 'name' => 'Sample Operations User']);
+    $routePrefix = $role === 'staff' ? 'staff' : 'admin';
+
+    $response = $this->actingAs($operationsUser)
+        ->get(route($routePrefix.'.dashboard'))
+        ->assertOk()
+        ->assertSee('data-admin-sidebar', false)
+        ->assertSee('data-admin-sidebar-navigation', false)
+        ->assertSee('aria-controls="admin-sidebar-group-0"', false)
+        ->assertSee('data-admin-sidebar-footer', false)
+        ->assertSee('Sample Operations User')
+        ->assertSee('title="Help &amp; Support"', false)
+        ->assertSee('title="Settings"', false)
+        ->assertSee('data-test="logout-button"', false);
+
+    if ($role === 'superadmin') {
+        $response->assertSeeInOrder(['Overview', 'User Management', 'Service Operations', 'Finance &amp; Insights', 'Administration'], false);
+    } else {
+        $response->assertSeeInOrder(['Workspace', 'Service Operations', 'Customer Care', 'Tools'], false);
+    }
+
+    $this->actingAs($operationsUser)
+        ->get(route($routePrefix.'.module', ['module' => 'dispatch-monitor']))
+        ->assertOk()
+        ->assertSee('data-super-admin-sidebar-item="dispatch-monitor"', false)
+        ->assertSee('aria-current="page"', false);
+})->with(['superadmin', 'staff']);
+
+test('staff workspace uses one light background image without affecting customer pages', function () {
+    $staff = User::factory()->create(['role' => 'staff']);
+    $customer = User::factory()->create(['role' => 'customer']);
+
+    $this->actingAs($staff)
+        ->get(route('staff.dashboard'))
+        ->assertOk()
+        ->assertSee('data-admin-workspace', false);
+
+    $this->actingAs($customer)
+        ->get(route('customer.module'))
+        ->assertOk()
+        ->assertDontSee('data-admin-workspace', false);
+
+    $background = public_path('admin-workspace-background.png');
+    $styles = file_get_contents(resource_path('css/app.css'));
+
+    expect(is_file($background))->toBeTrue()
+        ->and(getimagesize($background))->not->toBeFalse()
+        ->and($styles)->toContain("background-image: url('/admin-workspace-background.png');")
+        ->toContain('background-repeat: no-repeat;');
 });
 
 test('regular users do not see super admin sidebar modules', function () {
@@ -54,9 +93,8 @@ test('super admin sidebar modules link to their pages', function () {
     $response = $this->actingAs($superAdmin)->get(route('admin.dashboard'));
 
     foreach ([
-        'system-health' => 'System Health',
-        'users-roles' => 'Users & Roles',
-        'technician-verification' => 'Technician Verification',
+        'users-roles' => 'All Users',
+        'technician-verification' => 'Technician Applications',
         'service-bookings' => 'Service Bookings',
         'dispatch-monitor' => 'Dispatch Monitor',
         'walk-in-queue' => 'Walk-in Queue',
@@ -64,22 +102,36 @@ test('super admin sidebar modules link to their pages', function () {
         'ratings-reviews' => 'Ratings & Reviews',
         'reports-analytics' => 'Reports & Analytics',
         'support-disputes' => 'Support & Disputes',
-        'audit-logs' => 'Audit Logs',
         'service-catalog' => 'Service Catalog',
+        'audit-logs' => 'Audit Logs',
+        'system-health' => 'System Health',
         'platform-settings' => 'Platform Settings',
     ] as $slug => $label) {
-        $response->assertSee($label)
+        $response->assertSee('data-super-admin-sidebar-item="'.$slug.'"', false)
+            ->assertSee($label)
             ->assertSee('/admin/'.$slug, false);
     }
 });
 
-test('super admins can open every sidebar module', function () {
+test('technician verification is visible and active in the staff sidebar', function () {
+    $staff = User::factory()->create(['role' => 'staff']);
+
+    $this->actingAs($staff)
+        ->get(route('staff.module', ['module' => 'technician-verification']))
+        ->assertOk()
+        ->assertSee('data-super-admin-sidebar-item="technician-verification"', false)
+        ->assertSee('Technician Applications')
+        ->assertSee('aria-current="page"', false)
+        ->assertSee('data-technician-verification-dashboard', false);
+});
+
+test('super admins can still open every admin module directly', function () {
     $superAdmin = User::factory()->create(['role' => 'superadmin']);
 
     foreach ([
         'system-health' => 'System Health',
         'users-roles' => 'Users & Roles',
-        'technician-verification' => 'Technician Verification',
+        'technician-verification' => 'Technician',
         'service-bookings' => 'Service Bookings',
         'dispatch-monitor' => 'Dispatch Monitor',
         'walk-in-queue' => 'Walk-in Queue',
@@ -137,7 +189,7 @@ test('each super admin module exposes its operational content', function () {
     foreach ([
         'system-health' => ['Service checks', 'Resource snapshot'],
         'users-roles' => ['User directory', 'Total accounts'],
-        'technician-verification' => ['Verification queue', 'Pending review'],
+        'technician-verification' => ['Technicians needing verification', 'Pending review'],
         'service-bookings' => ['Service booking registry', 'Total bookings'],
         'dispatch-monitor' => ['Live dispatch queue', 'Available technicians'],
         'walk-in-queue' => ['Live walk-in queue', 'Available counters'],
@@ -156,7 +208,7 @@ test('each super admin module exposes its operational content', function () {
             ->assertSee($content[1]);
 
         if ($slug === 'users-roles') {
-            $response->assertSee('Make technician');
+            $response->assertSee('Create staff account');
         }
     }
 });
@@ -279,9 +331,13 @@ test('super admin module tables declare semantic column types', function () {
     $this->actingAs($superAdmin)
         ->get('/admin/technician-verification')
         ->assertOk()
+        ->assertSee('data-technician-verification-dashboard', false)
+        ->assertSee('data-technician-control-bar', false)
+        ->assertSee('data-technician-verification-search', false)
         ->assertSee('data-super-admin-column-type="chips"', false)
-        ->assertSee('data-super-admin-column-type="risk"', false)
-        ->assertSee('data-super-admin-column-type="status"', false);
+        ->assertSee('data-super-admin-column-type="status"', false)
+        ->assertSee('data-technician-results-footer', false)
+        ->assertSeeInOrder(['Verified accounts', 'Needs verification', 'Search by applicant name...', 'Applicant', 'Services', 'Service Setup', 'Status', 'Showing']);
 });
 
 test('super admin module tables render semantic status badges', function () {
@@ -323,18 +379,20 @@ test('super admins can update user roles through a module action', function () {
 
     Livewire::actingAs($superAdmin)
         ->test(ModulePage::class, ['module' => 'users-roles'])
-        ->call('updateUserRole', $user->id, 'technician');
+        ->call('updateUserRole', $user->id, 'staff');
 
-    expect($user->refresh()->role)->toBe('technician');
+    expect($user->refresh()->role)->toBe('staff');
 });
 
-test('super admin role changes reject staff roles without a workspace', function () {
+test('super admin role changes reject specialized roles without a workspace', function () {
     $superAdmin = User::factory()->create(['role' => 'superadmin']);
     $user = User::factory()->create(['role' => 'customer']);
 
     $this->actingAs($superAdmin)
         ->get('/admin/users-roles')
         ->assertOk()
+        ->assertSee('Make staff')
+        ->assertDontSee('Make admin')
         ->assertDontSee('Make dispatcher')
         ->assertDontSee('Make support staff')
         ->assertDontSee('Make finance staff');

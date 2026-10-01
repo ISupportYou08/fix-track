@@ -11,6 +11,7 @@ class TechnicianDocument extends Model
         'verification_id',
         'type',
         'label',
+        'file_path',
         'status',
         'masked_number',
         'expires_at',

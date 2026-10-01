@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 test('the application seeder provides demo accounts and services without transactional records', function () {
     $this->seed();
 
-    expect(DB::table('users')->count())->toBe(64)
+    expect(DB::table('users')->count())->toBe(65)
         ->and(ServiceCatalog::query()->where('is_active', true)->count())->toBe(100)
         ->and(ServiceCatalog::query()->where('is_active', true)->distinct()->count('category'))->toBe(10)
         ->and(DB::table('bookings')->count())->toBe(0)

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ServiceCatalog;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,30 @@ test('unchanged realtime snapshots only return version metadata', function () {
         ->assertOk()
         ->assertJsonPath('changed', false)
         ->assertJsonMissingPath('counts');
+});
+
+test('admin dashboard refreshes when its service catalog data changes', function () {
+    $admin = User::factory()->create(['role' => 'superadmin']);
+    $initial = $this->actingAs($admin)
+        ->get(route('realtime.snapshot', ['scope' => 'admin-dashboard']))
+        ->assertOk();
+
+    $this->travel(2)->seconds();
+
+    ServiceCatalog::query()->create([
+        'code' => 'dashboard-service',
+        'name' => 'Dashboard service',
+        'category' => 'Test',
+        'is_active' => true,
+        'description' => 'Service catalog refresh test.',
+    ]);
+
+    $updated = $this->actingAs($admin)
+        ->get(route('realtime.snapshot', ['scope' => 'admin-dashboard', 'since' => $initial->json('version')]))
+        ->assertOk();
+
+    expect($updated->json('version'))->not->toBe($initial->json('version'));
+    $updated->assertJsonPath('changed', true);
 });
 
 test('customer snapshots only expose that customer booking counters and detect updates', function () {
@@ -219,15 +244,13 @@ test('realtime counters use a short-lived versioned cache entry', function () {
     expect(Cache::has('fixtrack:realtime:admin-dispatch-monitor:global:'.$response->json('version')))->toBeTrue();
 });
 
-test('dashboard and report aggregates are stored in short-lived cache entries', function () {
+test('report and payment aggregates are stored in short-lived cache entries', function () {
     $admin = User::factory()->create(['role' => 'superadmin']);
 
-    $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
     $this->actingAs($admin)->get(route('admin.module', ['module' => 'reports-analytics']))->assertOk();
     $this->actingAs($admin)->get(route('admin.module', ['module' => 'payments-revenue']))->assertOk();
 
-    expect(Cache::has('fixtrack:dashboard:stats:none'))->toBeTrue()
-        ->and(Cache::has('fixtrack:analytics:metrics:none'))->toBeTrue()
+    expect(Cache::has('fixtrack:analytics:metrics:none'))->toBeTrue()
         ->and(Cache::has('fixtrack:payments:metrics:none'))->toBeTrue();
 });
 

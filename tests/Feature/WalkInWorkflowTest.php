@@ -39,7 +39,8 @@ test('a third customer can fill the final available Walk-In slot', function () {
     $third = createWalkInFor(User::factory()->create(['role' => 'customer']));
 
     expect(WalkInEntry::query()->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->count())->toBe(3)
-        ->and($third->queuePosition())->toBe(3);
+        ->and($third->queuePosition())->toBe(3)
+        ->and($third->estimatedWaitMinutes())->toBe(60);
 });
 
 test('a fourth customer cannot exceed the server-side Walk-In capacity', function () {
@@ -51,6 +52,23 @@ test('a fourth customer cannot exceed the server-side Walk-In capacity', functio
         ->toThrow(ValidationException::class, 'Walk-In Queue is currently full');
 
     expect(WalkInEntry::query()->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->count())->toBe(3);
+});
+
+test('each technician shop has its own three-place walk-in queue', function () {
+    $firstShop = User::factory()->create(['role' => 'technician', 'account_status' => 'active']);
+    $secondShop = User::factory()->create(['role' => 'technician', 'account_status' => 'active']);
+
+    foreach (range(1, WalkInEntry::MAX_ACTIVE) as $unused) {
+        createWalkInFor(User::factory()->create(['role' => 'customer']), ['technician_id' => $firstShop->id]);
+    }
+
+    $secondShopTicket = createWalkInFor(User::factory()->create(['role' => 'customer']), ['technician_id' => $secondShop->id]);
+
+    expect($secondShopTicket->queuePosition())->toBe(1)
+        ->and($secondShopTicket->estimatedWaitMinutes())->toBe(0)
+        ->and(WalkInEntry::query()->whereIn('status', WalkInEntry::ACTIVE_STATUSES)->count())->toBe(4);
+    expect(fn () => createWalkInFor(User::factory()->create(['role' => 'customer']), ['technician_id' => $firstShop->id]))
+        ->toThrow(ValidationException::class, 'currently full for this shop');
 });
 
 test('stale Walk-In tickets expire without being deleted or counted as active', function () {

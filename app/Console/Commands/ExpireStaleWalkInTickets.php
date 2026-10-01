@@ -53,10 +53,12 @@ class ExpireStaleWalkInTickets extends Command
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get()
-                ->skip(WalkInEntry::MAX_ACTIVE)
-                ->each(function (WalkInEntry $entry) use (&$expiredCount): void {
-                    $entry->transitionTo('cancelled', reason: 'Walk-In queue capacity normalized by the system.', metadata: ['source' => 'scheduler']);
-                    $expiredCount++;
+                ->groupBy(fn (WalkInEntry $entry): string => (string) ($entry->technician_id ?? 'unassigned'))
+                ->each(function (Collection $entries) use (&$expiredCount): void {
+                    $entries->skip(WalkInEntry::MAX_ACTIVE)->each(function (WalkInEntry $entry) use (&$expiredCount): void {
+                        $entry->transitionTo('cancelled', reason: 'Walk-In shop capacity normalized by the system.', metadata: ['source' => 'scheduler']);
+                        $expiredCount++;
+                    });
                 });
         });
 

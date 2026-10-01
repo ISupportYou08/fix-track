@@ -4,9 +4,11 @@ namespace App\Livewire\SuperAdmin;
 
 use App\Models\Booking;
 use App\Models\ServiceCatalog;
+use App\Models\SupportTicket;
 use App\Models\TechnicianVerification;
+use App\Models\User;
+use App\Models\WalkInEntry;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Number;
@@ -17,7 +19,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
-#[Title('Super Admin Dashboard')]
+#[Title('Operations Dashboard')]
 class Dashboard extends Component
 {
     /** @var array<string, bool> */
@@ -25,14 +27,16 @@ class Dashboard extends Component
 
     public function mount(): void
     {
-        abort_unless(auth()->user()?->isAdmin(), 403);
+        abort_unless(auth()->user()?->canAccessOperationsWorkspace(), 403);
     }
 
     public function render(): View
     {
         return view('livewire.super-admin.dashboard', [
             'firstName' => Str::before(auth()->user()->name, ' '),
-            'stats' => $this->stats(),
+            'isAdministrator' => auth()->user()->isSuperAdmin(),
+            'userOverview' => $this->userOverview(),
+            'staffOverview' => $this->staffOverview(),
             'bookingTrend' => $this->bookingTrend(),
             'statusBreakdown' => $this->statusBreakdown(),
             'recentBookings' => $this->recentBookings(),
@@ -42,62 +46,51 @@ class Dashboard extends Component
         ]);
     }
 
-    /** @return array<int, array{label: string, value: string, icon: string}> */
-    private function stats(): array
+    /** @return array{pendingBookings: int, unassignedJobs: int, waitingWalkIns: int, openTickets: int, technicianReviews: int} */
+    private function staffOverview(): array
     {
-        $version = $this->latestTableTimestamp('bookings');
-
-        return Cache::remember(
-            "fixtrack:dashboard:stats:{$version}",
-            now()->addSeconds(15),
-            fn (): array => $this->calculateStats(),
-        );
-    }
-
-    /** @return array<int, array{label: string, value: string, icon: string}> */
-    private function calculateStats(): array
-    {
-        $totalBookings = 0;
-        $activeBookings = 0;
-        $bookingsToday = 0;
-        $completedBookings = 0;
-        $actionRequired = 0;
-
-        if ($this->tableExists('bookings')) {
-            $totalBookings = Booking::query()->count();
-            $activeStatuses = ['pending', 'matching', 'assigned', 'en_route', 'in_progress'];
-            $activeBookings = Booking::query()->whereIn('status', $activeStatuses)->count();
-            $bookingsToday = Booking::query()->whereDate('created_at', today())->count();
-            $completedBookings = Booking::query()->where('status', 'completed')->count();
-            $actionRequired = Booking::query()->whereIn('status', ['pending', 'matching'])->count();
+        if (! auth()->user()->isStaff()) {
+            return ['pendingBookings' => 0, 'unassignedJobs' => 0, 'waitingWalkIns' => 0, 'openTickets' => 0, 'technicianReviews' => 0];
         }
 
-        $completionRate = $totalBookings > 0
-            ? Number::format($completedBookings / $totalBookings * 100, 1).'%'
-            : '0.0%';
-
         return [
-            ['label' => 'Active bookings', 'value' => (string) Number::format($activeBookings), 'icon' => 'clipboard-document-list'],
-            ['label' => 'Bookings today', 'value' => (string) Number::format($bookingsToday), 'icon' => 'calendar-days'],
-            ['label' => 'Completion rate', 'value' => $completionRate, 'icon' => 'chart-bar'],
-            ['label' => 'Action required', 'value' => (string) Number::format($actionRequired), 'icon' => 'exclamation-triangle'],
+            'pendingBookings' => $this->tableExists('bookings')
+                ? Booking::query()->whereIn('status', ['pending', 'matching'])->count()
+                : 0,
+            'unassignedJobs' => $this->tableExists('bookings')
+                ? Booking::query()->whereNull('assigned_technician_id')->whereIn('status', ['pending', 'matching'])->count()
+                : 0,
+            'waitingWalkIns' => $this->tableExists('walk_in_entries')
+                ? WalkInEntry::query()->whereIn('status', ['waiting', 'called', 'on_hold'])->count()
+                : 0,
+            'openTickets' => $this->tableExists('support_tickets')
+                ? SupportTicket::query()->whereIn('status', ['open', 'in_progress'])->count()
+                : 0,
+            'technicianReviews' => $this->tableExists('technician_verifications')
+                ? TechnicianVerification::query()->whereIn('status', ['submitted', 'under_review'])->count()
+                : 0,
         ];
     }
 
-    private function latestTableTimestamp(string $table): string
+    /** @return array{total: int, customers: int, technicians: int, staff: int, restricted: int} */
+    private function userOverview(): array
     {
-        if (! $this->tableExists($table) || ! Schema::hasColumn($table, 'updated_at')) {
-            return 'none';
+        if (! auth()->user()->isSuperAdmin() || ! $this->tableExists('users')) {
+            return ['total' => 0, 'customers' => 0, 'technicians' => 0, 'staff' => 0, 'restricted' => 0];
         }
 
-        $updatedAt = $table === 'bookings' ? Booking::query()->max('updated_at') : null;
-
-        return $updatedAt ? Carbon::parse($updatedAt)->toISOString() : 'none';
+        return [
+            'total' => User::query()->count(),
+            'customers' => User::query()->where('role', 'customer')->count(),
+            'technicians' => User::query()->where('role', 'technician')->count(),
+            'staff' => User::query()->where('role', 'staff')->count(),
+            'restricted' => User::query()->whereIn('account_status', ['suspended', User::ACCOUNT_BANNED])->count(),
+        ];
     }
 
     /**
      * @return array{
-     *     days: array<int, array{label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>,
+     *     days: array<int, array{date: string, label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>,
      *     paths: array{active: string, completed: string, cancelled: string},
      *     area: string,
      *     maxValue: int,
@@ -111,6 +104,7 @@ class Dashboard extends Component
         foreach (range(6, 0) as $daysAgo) {
             $date = now()->subDays($daysAgo)->startOfDay();
             $trend[$date->toDateString()] = [
+                'date' => $date->toDateString(),
                 'label' => $date->format('D'),
                 'active' => 0,
                 'completed' => 0,
@@ -134,7 +128,7 @@ class Dashboard extends Component
 
                 $bucket = match ((string) $row->status) {
                     'completed' => 'completed',
-                    'cancelled' => 'cancelled',
+                    'cancelled', 'no_show' => 'cancelled',
                     'pending', 'matching', 'assigned', 'en_route', 'in_progress' => 'active',
                     default => null,
                 };
@@ -145,7 +139,7 @@ class Dashboard extends Component
             }
         }
 
-        $maxValue = max(1, ...array_map(
+        $maxValue = max(2, ...array_map(
             fn (array $day): int => max($day['active'], $day['completed'], $day['cancelled']),
             array_values($trend),
         ));
@@ -198,7 +192,7 @@ class Dashboard extends Component
     }
 
     /**
-     * @param  array<int, array{label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>  $days
+     * @param  array<int, array{date: string, label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>  $days
      */
     private function smoothChartPath(array $days, string $series): string
     {
@@ -217,7 +211,7 @@ class Dashboard extends Component
     }
 
     /**
-     * @param  array<int, array{label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>  $days
+     * @param  array<int, array{date: string, label: string, active: int, completed: int, cancelled: int, x: int, activeY: int, completedY: int, cancelledY: int}>  $days
      */
     private function chartAreaPath(array $days, string $series): string
     {
@@ -244,7 +238,7 @@ class Dashboard extends Component
             ['key' => 'waiting', 'label' => 'Waiting', 'statuses' => ['pending', 'matching'], 'color' => 'violet'],
             ['key' => 'active', 'label' => 'Active', 'statuses' => ['assigned', 'en_route', 'in_progress'], 'color' => 'blue'],
             ['key' => 'completed', 'label' => 'Completed', 'statuses' => ['completed'], 'color' => 'emerald'],
-            ['key' => 'cancelled', 'label' => 'Cancelled', 'statuses' => ['cancelled'], 'color' => 'rose'],
+            ['key' => 'cancelled', 'label' => 'Cancelled / no-show', 'statuses' => ['cancelled', 'no_show'], 'color' => 'rose'],
         ];
         $total = max(1, (int) collect($statuses)->sum(
             fn (array $status): int => (int) $counts->only($status['statuses'])->sum(),
@@ -272,13 +266,15 @@ class Dashboard extends Component
 
         return Booking::query()
             ->with('customer:id,name')
-            ->select(['id', 'user_id', 'reference', 'service_type', 'status', 'is_priority', 'created_at'])
+            ->select(['id', 'user_id', 'reference', 'customer_name', 'service_type', 'status', 'is_priority', 'created_at'])
             ->latest('created_at')
             ->limit(6)
             ->get()
             ->map(fn (Booking $booking): array => [
+                'id' => $booking->id,
                 'reference' => (string) $booking->reference,
-                'customer' => (string) data_get($booking->customer, 'name', '—'),
+                'href' => route($this->operationsRouteName('module'), ['module' => 'service-bookings', 'booking' => $booking->id]),
+                'customer' => $booking->customer_name ?: (string) data_get($booking->customer, 'name', '—'),
                 'service' => $this->serviceLabel($booking->service_type),
                 'status' => $this->statusLabel((string) $booking->status),
                 'statusColor' => $this->statusColor((string) $booking->status),
@@ -288,7 +284,7 @@ class Dashboard extends Component
             ->all();
     }
 
-    /** @return array<int, array{label: string, value: int, percentage: int}> */
+    /** @return array<int, array{code: string, label: string, value: int, percentage: int}> */
     private function topServices(): array
     {
         if (! $this->tableExists('bookings')) {
@@ -304,13 +300,14 @@ class Dashboard extends Component
         $maxValue = max(1, (int) ($services->max('total') ?? 0));
 
         return $services->map(fn (Booking $service): array => [
+            'code' => (string) $service->service_type,
             'label' => $this->serviceLabel($service->service_type),
             'value' => (int) $service->total,
             'percentage' => (int) round((int) $service->total / $maxValue * 100),
         ])->all();
     }
 
-    /** @return array<int, array{title: string, detail: string, status: string, color: string}> */
+    /** @return array<int, array{key: string, title: string, detail: string, status: string, color: string, href: string}> */
     private function needsAttention(): array
     {
         $items = [];
@@ -318,16 +315,18 @@ class Dashboard extends Component
         if ($this->tableExists('bookings')) {
             $items = Booking::query()
                 ->with('customer:id,name')
-                ->select(['id', 'user_id', 'reference', 'service_type', 'status'])
+                ->select(['id', 'user_id', 'reference', 'customer_name', 'service_type', 'status', 'created_at'])
                 ->whereIn('status', ['pending', 'matching'])
                 ->oldest('created_at')
                 ->limit(4)
                 ->get()
                 ->map(fn (Booking $booking): array => [
+                    'key' => 'booking-'.$booking->id,
                     'title' => (string) $booking->reference,
-                    'detail' => $this->serviceLabel($booking->service_type).' · '.((string) data_get($booking->customer, 'name', '—')),
-                    'status' => $this->statusLabel((string) $booking->status),
-                    'color' => $this->statusColor((string) $booking->status),
+                    'detail' => $this->serviceLabel($booking->service_type).' · '.($booking->customer_name ?: (string) data_get($booking->customer, 'name', '—')).' · waiting '.$booking->created_at?->diffForHumans(short: true),
+                    'status' => $booking->created_at?->lt(now()->subMinutes(15)) ? 'Dispatch overdue' : $this->statusLabel((string) $booking->status),
+                    'color' => $booking->created_at?->lt(now()->subMinutes(15)) ? 'red' : $this->statusColor((string) $booking->status),
+                    'href' => route($this->operationsRouteName('module'), ['module' => 'service-bookings', 'booking' => $booking->id]),
                 ])
                 ->all();
         }
@@ -341,10 +340,12 @@ class Dashboard extends Component
                 ->limit(2)
                 ->get()
                 ->map(fn (TechnicianVerification $verification): array => [
+                    'key' => 'verification-'.$verification->id,
                     'title' => 'Technician verification',
                     'detail' => (string) data_get($verification->technician, 'name', '—'),
                     'status' => 'Review',
                     'color' => 'violet',
+                    'href' => route($this->operationsRouteName('module'), ['module' => 'technician-verification']),
                 ])
                 ->all();
 
@@ -359,7 +360,11 @@ class Dashboard extends Component
     {
         $queueCount = $this->tableExists('jobs') ? DB::table('jobs')->count() : 0;
         $failedCount = $this->tableExists('failed_jobs') ? DB::table('failed_jobs')->count() : 0;
-        $schemaReady = $this->tableExists('bookings');
+        $missingTables = array_values(array_filter(
+            ['users', 'bookings', 'service_catalog', 'technician_verifications', 'payments'],
+            fn (string $table): bool => ! $this->tableExists($table),
+        ));
+        $schemaReady = $missingTables === [];
 
         return [
             [
@@ -371,7 +376,7 @@ class Dashboard extends Component
             [
                 'label' => 'Operations schema',
                 'value' => $schemaReady ? 'Ready' : 'Pending',
-                'detail' => $schemaReady ? 'FixTrack tables available' : 'Waiting for migrated tables',
+                'detail' => $schemaReady ? 'Core records connected' : Number::format(count($missingTables)).' required tables missing',
                 'color' => $schemaReady ? 'emerald' : 'amber',
             ],
             [
@@ -415,5 +420,14 @@ class Dashboard extends Component
             'matching' => 'violet',
             default => 'amber',
         };
+    }
+
+    private function operationsRouteName(string $route): string
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+
+        return $user->operationsRouteName($route);
     }
 }
