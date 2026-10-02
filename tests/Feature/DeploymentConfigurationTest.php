@@ -71,3 +71,19 @@ test('the Vercel deployment configuration uses PHP 8.4 and routes through Larave
         ->and($configuration['crons'][0]['path'])->toBe('/internal/cron/expire-walk-ins')
         ->and($configuration['crons'])->toHaveCount(1);
 });
+
+test('the Vercel build copies public interface images into its output directory', function () {
+    $assetBuildScript = file_get_contents(base_path('prepare-vercel-assets.mjs'));
+    $publicInterfaceImages = [
+        'admin-workspace-background.png',
+        'customer-registration-abstract.jpg',
+        'customer-registration-bg.jpg',
+        'fixtrack-logo.png',
+        'sign-in-repair.jpg',
+    ];
+
+    foreach ($publicInterfaceImages as $publicInterfaceImage) {
+        expect(public_path($publicInterfaceImage))->toBeFile()
+            ->and($assetBuildScript)->toContain("'{$publicInterfaceImage}'");
+    }
+});
