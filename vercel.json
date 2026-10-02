@@ -23,10 +23,6 @@
     {
       "path": "/internal/cron/expire-walk-ins",
       "schedule": "5 16 * * *"
-    },
-    {
-      "path": "/internal/cron/migrate-database",
-      "schedule": "55 7 * * *"
     }
   ]
 }

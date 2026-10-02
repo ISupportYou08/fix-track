@@ -69,6 +69,5 @@ test('the Vercel deployment configuration uses PHP 8.4 and routes through Larave
         ->and($configuration['functions']['api/index.php']['runtime'])->toBe('vercel-php@0.8.0')
         ->and(collect($configuration['routes'])->last()['dest'])->toBe('/api/index.php')
         ->and($configuration['crons'][0]['path'])->toBe('/internal/cron/expire-walk-ins')
-        ->and($configuration['crons'][1]['path'])->toBe('/internal/cron/migrate-database')
-        ->and($configuration['crons'][1]['schedule'])->toBe('55 7 * * *');
+        ->and($configuration['crons'])->toHaveCount(1);
 });
