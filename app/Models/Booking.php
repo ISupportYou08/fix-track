@@ -126,6 +126,12 @@ class Booking extends Model
         return $this->hasOne(BookingChat::class);
     }
 
+    /** @return HasOne<BookingItemAnalysis, $this> */
+    public function itemAnalysis(): HasOne
+    {
+        return $this->hasOne(BookingItemAnalysis::class);
+    }
+
     /** @return BelongsTo<ServiceCatalog, $this> */
     public function service(): BelongsTo
     {

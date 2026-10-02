@@ -33,7 +33,8 @@ test('authenticated workspaces expose mobile bottom navigation and keep the side
                 ->assertDontSee('data-app-mobile-nav-item="more"', false);
         } elseif ($role === 'technician') {
             $response->assertDontSee('data-app-mobile-nav-item="more"', false)
-                ->assertDontSee('max-lg:!px-0', false)
+                ->assertSee('max-lg:!px-0', false)
+                ->assertSee('max-lg:!pt-0', false)
                 ->assertDontSee('data-app-customer-mobile-shell', false);
         } else {
             $response->assertSee('data-app-mobile-nav-item="more"', false)

@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\GoogleRegistrationController;
 use App\Http\Controllers\Auth\PendingTechnicianRegistrationController;
 use App\Http\Controllers\Auth\StaffLoginController;
 use App\Http\Controllers\Auth\TechnicianEmailVerificationController;
+use App\Http\Controllers\BookingItemImageController;
 use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SupportAttachmentController;
@@ -96,6 +97,8 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('booking-item-analyses/{analysis}/image', BookingItemImageController::class)
+        ->name('booking-item-analyses.image');
     Route::get('support/messages/{message}/attachment', SupportAttachmentController::class)->name('support.attachment');
     Route::get('walk-ins/{entry}/receipt', WalkInReceiptController::class)->name('walk-ins.receipt');
     Route::get('dashboard', function () {

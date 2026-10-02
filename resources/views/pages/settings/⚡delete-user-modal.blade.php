@@ -37,7 +37,7 @@ new class extends Component {
 
         <flux:input wire:model="password" :label="__('Password')" type="password" viewable />
 
-        <div class="flex justify-end space-x-2 rtl:space-x-reverse">
+        <div class="app-mobile-action-group flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <flux:modal.close>
                 <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
             </flux:modal.close>

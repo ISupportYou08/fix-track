@@ -8,7 +8,8 @@
 @endphp
 
 <div
-    class="flex w-full flex-col gap-6 p-6 lg:p-8"
+    class="flex min-w-0 w-full flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:p-8"
+    data-app-responsive-page
     @if ($realtimeScope)
         data-realtime-scope="{{ $realtimeScope }}"
         data-realtime-url="{{ route('realtime.snapshot', ['scope' => $realtimeScope]) }}"
@@ -24,13 +25,13 @@
             <flux:breadcrumbs.item>{{ $module['label'] }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
-        <div class="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-4" data-app-page-header>
             <div class="min-w-0">
                 <flux:heading size="xl" level="1">{{ $module['label'] }}</flux:heading>
                 <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">{{ $module['description'] }}</flux:text>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2" data-app-page-actions>
                 @if ($moduleConnections !== [])
                     <x-super-admin.section-menu :actions="$moduleConnections" :label="__('Related modules')" />
                 @endif
@@ -174,8 +175,8 @@
                 </div>
             </div>
 
-            <div class="relative mt-4 h-48 overflow-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-3 dark:border-white/10 dark:bg-white/[0.03]" data-super-admin-analytics-chart-plot>
-                <svg viewBox="0 0 700 220" class="h-full w-full" role="img" aria-label="Seven-day analytics trend for active, completed, and cancelled bookings" preserveAspectRatio="none">
+            <div class="relative mt-4 h-48 overflow-x-auto overflow-y-hidden rounded-xl border border-zinc-200/80 bg-zinc-50/70 p-3 dark:border-white/10 dark:bg-white/[0.03]" data-super-admin-analytics-chart-plot>
+                <svg viewBox="0 0 700 220" class="h-full w-full min-w-[34rem] sm:min-w-0" role="img" aria-label="Seven-day analytics trend for active, completed, and cancelled bookings" preserveAspectRatio="none">
                     <g data-super-admin-analytics-horizontal-grid>
                         <line x1="42" y1="180" x2="660" y2="180" class="stroke-zinc-200/80 dark:stroke-white/[0.08]" />
                         <line x1="42" y1="108" x2="660" y2="108" class="stroke-zinc-200/60 dark:stroke-white/[0.06]" />
@@ -388,7 +389,7 @@
                 <flux:input wire:model="staffPasswordConfirmation" type="password" label="Confirm password" autocomplete="new-password" viewable required />
             </div>
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button type="button" variant="outline" wire:click="cancelStaffEditor">Cancel</flux:button>
                 <flux:button type="submit" variant="primary" icon="user-plus" wire:loading.attr="disabled" wire:target="createStaff">Create staff account</flux:button>
             </div>
@@ -431,7 +432,7 @@
                 </div>
             @endif
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button variant="outline" wire:click="cancelConfirmation">
                     Cancel
                 </flux:button>
@@ -469,7 +470,7 @@
                 <flux:text class="rounded-lg border border-dashed border-zinc-300 p-4 text-zinc-500 dark:border-white/10 dark:text-zinc-400">No verified active technicians are available for assignment.</flux:text>
             @endif
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button variant="outline" wire:click="cancelAssignment">Cancel</flux:button>
                 <flux:button variant="primary" wire:click="saveAssignment" wire:loading.attr="disabled" wire:target="saveAssignment">Assign technician</flux:button>
             </div>
@@ -490,7 +491,7 @@
 
             <flux:input wire:model="settingValue" label="Value" />
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button variant="outline" wire:click="cancelSettingEditor">Cancel</flux:button>
                 <flux:button variant="primary" wire:click="saveSetting" wire:loading.attr="disabled" wire:target="saveSetting">Save setting</flux:button>
             </div>
@@ -539,7 +540,7 @@
             </div>
             <flux:textarea wire:model="supportMessage" label="Reply to customer" rows="5" placeholder="Write a response that the customer will see." />
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button variant="outline" wire:click="cancelSupportEditor">Cancel</flux:button>
                 <flux:button variant="primary" wire:click="saveSupportTicket" wire:loading.attr="disabled" wire:target="saveSupportTicket">Save ticket</flux:button>
             </div>
@@ -550,7 +551,7 @@
         <form wire:submit="recordWalkInCash" class="space-y-5">
             <div><flux:heading size="lg">Walk-in cash checkout</flux:heading><flux:text class="mt-1">Enter the final amount received. A receipt becomes available once recorded.</flux:text></div>
             <flux:input wire:model="checkoutAmount" label="Cash received (PHP)" type="number" min="0.01" step="0.01" required />
-            <div class="flex justify-end gap-2"><flux:button type="button" variant="outline" wire:click="$set('showWalkInCheckout', false)">Cancel</flux:button><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="recordWalkInCash">Record payment</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><flux:button type="button" variant="outline" wire:click="$set('showWalkInCheckout', false)">Cancel</flux:button><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="recordWalkInCash">Record payment</flux:button></div>
         </form>
     </flux:modal>
 
@@ -574,7 +575,7 @@
             </div>
             <flux:textarea wire:model="catalogDescription" label="Description" rows="3" placeholder="Describe what this service includes." />
 
-            <div class="flex justify-end gap-3">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button variant="outline" wire:click="cancelCatalogEditor">Cancel</flux:button>
                 <flux:button variant="primary" wire:click="saveCatalogService" wire:loading.attr="disabled" wire:target="saveCatalogService">Save service</flux:button>
             </div>

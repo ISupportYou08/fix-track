@@ -14,6 +14,13 @@
         .row { padding: .75rem 0; border-bottom: 1px solid #e4e4e7; }
         .total { font-size: 1.3rem; font-weight: bold; }
         button { margin-top: 1.5rem; padding: .7rem 1.2rem; background: #18181b; color: white; border: 0; border-radius: .5rem; cursor: pointer; }
+        @media (max-width: 40rem) {
+            body { padding: .75rem; }
+            main { padding: 1rem; border-radius: .75rem; }
+            header, .row { align-items: flex-start; flex-direction: column; gap: .35rem; }
+            .row strong, .row span { max-width: 100%; overflow-wrap: anywhere; }
+            button { min-height: 2.75rem; width: 100%; }
+        }
         @media print { body { background: white; padding: 0; } main { border: 0; padding: 0; } button { display: none; } }
     </style>
 </head>

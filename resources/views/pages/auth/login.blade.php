@@ -68,12 +68,12 @@
             </div>
         </section>
 
-        <section class="relative z-10 flex min-h-screen w-full flex-col items-center justify-center bg-white px-6 py-12 shadow-2xl lg:w-1/2 lg:px-16 lg:shadow-none" aria-labelledby="sign-in-heading">
+        <section class="relative z-10 flex min-h-dvh w-full flex-col items-center justify-center bg-white px-4 py-8 shadow-2xl sm:px-6 sm:py-12 lg:w-1/2 lg:px-16 lg:shadow-none" aria-labelledby="sign-in-heading">
             <div class="relative z-20 w-full max-w-md">
                 <div x-show="! success" x-transition.opacity>
-                    <header class="relative mb-10 text-center">
+                    <header class="relative mb-8 text-center sm:mb-10">
                         <svg class="pointer-events-none absolute top-1/2 left-1/2 z-0 size-36 -translate-x-1/2 -translate-y-1/2 -rotate-[30deg] text-[#0091D5] opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
-                        <h1 id="sign-in-heading" class="relative z-10 mb-3 text-5xl font-bold tracking-tight text-[#0091D5] drop-shadow-sm">Sign In</h1>
+                        <h1 id="sign-in-heading" class="relative z-10 mb-3 text-4xl font-bold tracking-tight text-[#0091D5] drop-shadow-sm sm:text-5xl">Sign In</h1>
                         <p class="relative z-10 font-medium text-gray-500">Fix Track</p>
                     </header>
                     <x-auth-session-status class="mb-5" :status="session('status')" />

@@ -1,5 +1,6 @@
 <div
-    class="admin-dashboard-reference mx-auto flex w-full max-w-7xl flex-col gap-6 font-sans text-gray-800 dark:text-zinc-100"
+    class="admin-dashboard-reference mx-auto flex min-w-0 w-full max-w-7xl flex-col gap-5 px-4 pt-4 font-sans text-gray-800 sm:gap-6 sm:px-6 sm:pt-6 lg:px-0 lg:pt-0 dark:text-zinc-100"
+    data-app-responsive-page
     data-realtime-scope="admin-dashboard"
     data-realtime-url="{{ route('realtime.snapshot', ['scope' => 'admin-dashboard']) }}"
     data-realtime-interval="10000"
@@ -10,13 +11,13 @@
             <flux:breadcrumbs.item>Dashboard</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-4" data-app-page-header>
             <div class="min-w-0">
                 <h1 class="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{{ $isAdministrator ? 'Administrator Control Center' : 'Staff Operations Dashboard' }}</h1>
                 <p class="mt-1 text-sm text-gray-500 dark:text-zinc-400">{{ $isAdministrator ? 'Manage people, platform access, and service operations from one workspace.' : 'Handle technician reviews, bookings, dispatch, payments, and customer requests.' }}</p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2" data-app-page-actions>
                 @if ($isAdministrator)
                     <flux:button :href="route('admin.module', ['module' => 'users-roles'])" wire:navigate variant="primary" icon="users">Manage all users</flux:button>
                     <flux:button :href="route('admin.module', ['module' => 'platform-settings'])" wire:navigate variant="outline" icon="cog-6-tooth">Platform settings</flux:button>
@@ -144,7 +145,7 @@
                     <p class="mt-1 max-w-sm text-sm leading-6 text-zinc-500 dark:text-zinc-400">Start receiving bookings to see daily trends here.</p>
                 </div>
             @else
-            <div class="relative mt-4 min-h-[15.625rem] flex-1 overflow-hidden rounded-xl bg-white dark:bg-zinc-900" data-super-admin-booking-activity-chart x-data="{ hoveredDay: null }">
+            <div class="relative mt-4 min-h-[15.625rem] flex-1 overflow-x-auto overflow-y-hidden rounded-xl bg-white dark:bg-zinc-900" data-super-admin-booking-activity-chart x-data="{ hoveredDay: null }">
                 <div
                     x-cloak
                     x-show="hoveredDay"
@@ -160,7 +161,7 @@
                     </div>
                 </div>
 
-                <svg viewBox="0 0 700 220" class="h-full min-h-[12rem] w-full" role="img" aria-label="Seven-day booking activity line chart" preserveAspectRatio="none">
+                <svg viewBox="0 0 700 220" class="h-full min-h-[12rem] w-full min-w-[34rem] sm:min-w-0" role="img" aria-label="Seven-day booking activity line chart" preserveAspectRatio="none">
                     <defs>
                         <linearGradient id="super-admin-active-area" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.24" />

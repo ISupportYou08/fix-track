@@ -169,7 +169,8 @@ test('customer Messages opens with the assistant on mobile and the dashboard emb
     $dashboard = $this->actingAs($customer)
         ->get(route('customer.module'))
         ->assertOk()
-        ->assertSee('Open messages')
+        ->assertSee('Open FixTrack Support')
+        ->assertSee('data-customer-reference-chat-widget', false)
         ->assertSee('data-customer-message-panel', false)
         ->assertSee('data-booking-messenger-layout="compact"', false)
         ->assertDontSee('Available Technicians');

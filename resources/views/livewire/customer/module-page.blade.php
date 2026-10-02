@@ -43,20 +43,20 @@
     @if ($moduleSlug === 'overview')
         @include('livewire.customer.dashboard-overview')
     @else
-    <div class="{{ $mobileTab ? 'hidden lg:flex' : 'flex' }} w-full flex-col gap-6 p-6 lg:p-8">
+    <div class="{{ $mobileTab ? 'hidden lg:flex' : 'flex' }} min-w-0 w-full flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:p-8" data-app-responsive-page>
         <div class="dashboard-reveal">
         <flux:breadcrumbs>
             <flux:breadcrumbs.item :href="route('customer.module')" wire:navigate>Customer</flux:breadcrumbs.item>
             <flux:breadcrumbs.item>{{ $module['label'] }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
-        <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-4" data-app-page-header>
             <div class="min-w-0">
                 <flux:heading size="xl" level="1">{{ $moduleSlug === 'overview' ? 'Welcome back, '.auth()->user()->name : $module['label'] }}</flux:heading>
                 <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">{{ $moduleSlug === 'overview' ? 'Manage your bookings and repair services.' : $module['description'] }}</flux:text>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2" data-app-page-actions>
                 <flux:badge :color="$moduleState['color']" size="lg">{{ $moduleState['label'] }}</flux:badge>
                 @if ($moduleSlug !== 'book-service')
                     <flux:button size="sm" variant="primary" icon="plus" wire:click="startBooking">Book a technician</flux:button>
@@ -389,7 +389,145 @@
             $bookingFlow === 'manual' && $bookingStep > 1 && $manualServiceMode === 'home-service' => 'Home service booking',
             default => $bookingFlow === 'manual' ? 'Manual booking' : 'Quick booking',
         };
+        $aiPhotoLabels = ['Front', 'Side', 'Back'];
+        $aiCaptureIndex = $aiRetakeImageIndex ?? count($aiItemImages);
+        $aiCaptureLabel = $aiPhotoLabels[min($aiCaptureIndex, 2)];
     @endphp
+    <flux:modal name="customer-ai-booking-flow" class="max-w-2xl" @close="closeAiBookingFlow" wire:model="showAiBookingFlow" data-ai-assisted-booking-modal>
+        <div class="space-y-6">
+            <div class="pe-10">
+                <div class="flex items-start gap-3">
+                    <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><flux:icon name="camera" class="size-5" /></span>
+                    <div>
+                        <flux:heading size="lg">AI assisted booking</flux:heading>
+                        <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Take or upload exactly three clear photos. FixTrack will compare every view and suggest a service for you to confirm.</flux:text>
+                    </div>
+                </div>
+            </div>
+
+            @if ($aiAnalysisStatus === 'result')
+                @php $aiMatchedService = $serviceCatalog->firstWhere('code', $aiSuggestedServiceCode); @endphp
+                <div class="grid gap-5 sm:grid-cols-[12rem_minmax(0,1fr)]" data-ai-analysis-result>
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-1">
+                        @foreach ($aiItemImages as $index => $aiItemImage)
+                            <img wire:key="ai-result-image-{{ $index }}" src="{{ $aiItemImage->temporaryUrl() }}" alt="View {{ $index + 1 }} of {{ $aiDetectedItemName }}" class="aspect-square w-full rounded-2xl border border-zinc-200 object-cover dark:border-white/10" />
+                        @endforeach
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <flux:text class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Detected item</flux:text>
+                            <flux:heading size="xl" class="mt-1">{{ $aiDetectedItemName }}</flux:heading>
+                        </div>
+                        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <div class="font-semibold text-zinc-900 dark:text-white">{{ $aiMatchedService?->name }}</div>
+                                    <div class="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{{ $aiSuggestedServiceCategory }}</div>
+                                </div>
+                                <flux:badge color="emerald">{{ round($aiConfidence * 100) }}% match</flux:badge>
+                            </div>
+                            @if ($aiExplanation !== '')<p class="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{{ $aiExplanation }}</p>@endif
+                        </div>
+                        <p class="text-sm text-zinc-500 dark:text-zinc-400">Confirm this suggestion, then describe the actual problem in the manual home service form. The image identifies the item and does not diagnose hidden damage.</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-zinc-200 pt-5 sm:flex-row sm:justify-between dark:border-white/10">
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row">
+                        <flux:button type="button" variant="subtle" wire:click="resetAiItemAnalysis">Use another image</flux:button>
+                        <flux:button type="button" variant="subtle" wire:click="chooseAiManualBooking">Choose manually</flux:button>
+                    </div>
+                    <flux:button type="button" variant="primary" icon="arrow-right" wire:click="continueWithAiAnalysis">Continue with this result</flux:button>
+                </div>
+            @else
+                <div class="space-y-4" x-data="aiItemCamera" x-on:ai-item-camera-start.window="startCamera" x-on:ai-item-camera-stop.window="stopCamera" data-ai-item-camera data-ai-capture-view="{{ strtolower($aiCaptureLabel) }}">
+                    <div x-show="active" x-cloak class="space-y-3 rounded-2xl bg-zinc-950 p-3" data-ai-camera-preview>
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-white">
+                            <span class="text-sm font-semibold">{{ $aiCaptureLabel }} view</span>
+                            <span class="text-xs text-zinc-300">Photo {{ min($aiCaptureIndex + 1, 3) }} of 3</span>
+                        </div>
+                        <video x-ref="cameraVideo" autoplay muted playsinline class="max-h-80 w-full rounded-xl bg-black object-contain" aria-label="Live camera preview"></video>
+                        <canvas x-ref="cameraCanvas" class="hidden"></canvas>
+                        <div class="flex flex-wrap justify-center gap-2">
+                            <flux:button type="button" variant="primary" icon="camera" x-on:click="capturePhoto">Capture photo</flux:button>
+                            <flux:button type="button" variant="subtle" x-on:click="stopCamera">Cancel camera</flux:button>
+                        </div>
+                    </div>
+
+                    <div x-show="!active" class="space-y-4">
+                        @if ($aiItemImages !== [])
+                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                                <div class="mb-3 flex items-center justify-between gap-3">
+                                    <span class="text-sm font-semibold text-zinc-900 dark:text-white">{{ count($aiItemImages) }} of 3 images ready</span>
+                                    <span class="text-xs text-zinc-500">Front · Side · Back</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" data-ai-item-image-previews>
+                                    @foreach ($aiItemImages as $index => $aiItemImage)
+                                        <div wire:key="ai-upload-image-{{ $index }}" class="relative">
+                                            <img src="{{ $aiItemImage->temporaryUrl() }}" alt="Selected item view {{ $index + 1 }}" class="aspect-square w-full rounded-xl object-cover" />
+                                            <span class="absolute left-2 top-2 rounded-full bg-zinc-950/80 px-2.5 py-1 text-xs font-semibold text-white shadow">{{ $aiPhotoLabels[$index] ?? 'Extra' }} view</span>
+                                            <button type="button" wire:click="removeAiItemImage({{ $index }})" class="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-zinc-950/80 text-white shadow transition hover:bg-red-600" aria-label="Remove image {{ $index + 1 }}"><flux:icon name="x-mark" class="size-4" /></button>
+                                            <button type="button" wire:click="retakeAiItemImage({{ $index }})" class="absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-zinc-900 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2" data-ai-retake-image>
+                                                <flux:icon name="camera" class="size-4" />
+                                                Retake
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                        @if (count($aiItemImages) < 3)
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <button type="button" x-on:click="startCamera" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center transition hover:border-emerald-400 dark:border-emerald-500/30 dark:bg-emerald-500/10" data-ai-item-camera-button><flux:icon name="camera" class="mx-auto size-6 text-emerald-700 dark:text-emerald-300" /><span class="mt-2 block font-semibold text-zinc-900 dark:text-white">Take {{ strtolower($aiCaptureLabel) }} photo</span><span class="mt-1 block text-xs text-zinc-500">Required view: {{ $aiCaptureLabel }}</span></button>
+                                <label for="ai-item-images" class="cursor-pointer rounded-xl border border-zinc-200 bg-white p-4 text-center transition hover:border-emerald-400 dark:border-white/10 dark:bg-white/[0.03]"><flux:icon name="arrow-up-tray" class="mx-auto size-6 text-zinc-600 dark:text-zinc-300" /><span class="mt-2 block font-semibold text-zinc-900 dark:text-white">Upload images</span><span class="mt-1 block text-xs text-zinc-500">Use front, side, and back JPG, PNG, or WEBP files</span><input id="ai-item-images" x-ref="uploadInput" type="file" wire:model="aiItemImages" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" data-ai-item-image-input /></label>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div x-show="error !== ''" x-cloak x-text="error" class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:bg-amber-500/10 dark:text-amber-200" role="alert" data-ai-camera-error></div>
+
+                    <div wire:loading wire:target="aiItemImages" class="w-full rounded-xl bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300" role="status">Uploading images…</div>
+                    @error('aiItemImages')<div class="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300" role="alert">{{ $message }}</div>@enderror
+                    @error('aiItemImages.*')<div class="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300" role="alert">{{ $message }}</div>@enderror
+
+                    @if ($aiAnalysisStatus === 'unsupported')
+                        @php $aiPossibleService = $serviceCatalog->firstWhere('code', $aiSuggestedServiceCode); @endphp
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200" data-ai-analysis-unsupported>
+                            <div class="font-semibold">We could not confidently match this item.</div>
+                            @if ($aiDetectedItemName !== '')<p class="mt-1">Possible item: {{ $aiDetectedItemName }}</p>@endif
+                            @if ($aiPossibleService)
+                                <p class="mt-1">Suggested service: {{ $aiPossibleService->name }} · {{ $aiPossibleService->category }}</p>
+                                <p class="mt-1">You can continue with this suggestion and review or change it in manual booking.</p>
+                            @else
+                                <p class="mt-1">Try clearer photos with one item visible, or choose the service manually.</p>
+                            @endif
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <flux:button type="button" variant="subtle" icon="camera" wire:click="retakeAllAiItemImages" data-ai-retake-all>
+                                    Retake all photos
+                                </flux:button>
+                                @if ($aiPossibleService)
+                                    <flux:button type="button" variant="primary" icon="arrow-right" wire:click="continueWithPossibleAiMatch" data-ai-book-possible-item>
+                                        Book this possible item
+                                    </flux:button>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-zinc-200 pt-5 sm:flex-row sm:justify-between dark:border-white/10">
+                    <flux:button type="button" variant="subtle" wire:click="chooseAiManualBooking">Choose manually</flux:button>
+                    @if (count($aiItemImages) === 3)
+                        <flux:button type="button" variant="primary" icon="sparkles" wire:click="analyzeAiItemImage" wire:loading.attr="disabled" wire:target="analyzeAiItemImage,aiItemImages" data-ai-analyze-button>
+                            <span wire:loading.remove wire:target="analyzeAiItemImage">Analyze images</span>
+                            <span wire:loading wire:target="analyzeAiItemImage">Analyzing…</span>
+                        </flux:button>
+                    @endif
+                </div>
+            @endif
+        </div>
+    </flux:modal>
+
     <flux:modal name="customer-booking-flow" scroll="none" class="max-w-3xl {{ $isServiceDetailsStep ? 'overflow-hidden pb-2!' : '' }}" @close="closeBookingFlow" wire:model="showBookingFlow">
         <form class="{{ $isServiceDetailsStep ? 'space-y-4 overflow-hidden' : 'space-y-6' }}" wire:submit="submitBookingFlow">
             <div class="{{ $showsBookingProgress ? 'space-y-4' : '' }}">
@@ -501,6 +639,17 @@
                 </div>
             @elseif ($isServiceDetailsStep)
                 <div wire:key="booking-flow-service-details-step">
+                    @if ($aiAnalysisConfirmed)
+                        <div class="mb-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10" data-ai-prefilled-service>
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"><flux:icon name="sparkles" class="size-4" /></span>
+                            <div><div class="text-sm font-semibold text-emerald-900 dark:text-emerald-100">AI identified: {{ $aiDetectedItemName }}</div><p class="mt-0.5 text-xs text-emerald-800 dark:text-emerald-200">The suggested category and service are selected below. You can change them before continuing.</p></div>
+                        </div>
+                    @elseif ($aiDetectedItemName !== '' && $aiSuggestedServiceCode === $serviceType)
+                        <div class="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10" data-ai-possible-service-prefill>
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"><flux:icon name="sparkles" class="size-4" /></span>
+                            <div><div class="text-sm font-semibold text-amber-900 dark:text-amber-100">Possible item: {{ $aiDetectedItemName }}</div><p class="mt-0.5 text-xs text-amber-800 dark:text-amber-200">The suggested category and service are selected below. Review or change them before continuing.</p></div>
+                        </div>
+                    @endif
                     <flux:heading size="md">Choose a service category</flux:heading>
                     <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">Select a category, then choose the exact service.</flux:text>
                     <div class="mt-4 max-h-56 overflow-y-auto overscroll-contain pr-2 sm:max-h-64" aria-label="Service category and service selector">
@@ -663,9 +812,19 @@
         <div class="space-y-6">
             @if ($selectedBooking)
                 <div class="space-y-2"><div class="flex items-center justify-between gap-3"><flux:heading size="lg">{{ $serviceLabel($selectedBooking->service_type) }}</flux:heading><x-super-admin.table-cell :value="$selectedBooking->status" type="status" /></div><flux:text class="text-zinc-500">{{ $selectedBooking->reference }}</flux:text></div>
+                @if ($selectedBooking->itemAnalysis)
+                    <div class="grid gap-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] dark:border-emerald-500/30 dark:bg-emerald-500/10" data-booking-item-analysis>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-1">
+                            @foreach ($selectedBooking->itemAnalysis->imageFiles() as $index => $image)
+                                <img wire:key="customer-analysis-image-{{ $index }}" src="{{ route('booking-item-analyses.image', ['analysis' => $selectedBooking->itemAnalysis, 'image' => $index]) }}" alt="View {{ $index + 1 }} of {{ $selectedBooking->itemAnalysis->detected_item_name }}" class="aspect-square w-full rounded-lg object-cover" />
+                            @endforeach
+                        </div>
+                        <div><flux:text class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">AI identified item</flux:text><div class="mt-1 font-semibold text-zinc-900 dark:text-white">{{ $selectedBooking->itemAnalysis->detected_item_name }}</div><p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{{ $selectedBooking->itemAnalysis->explanation }}</p></div>
+                    </div>
+                @endif
                 <div class="grid gap-4 text-sm sm:grid-cols-2"><div><flux:text class="text-zinc-500">Address</flux:text><div class="mt-1">{{ $selectedBooking->address }}</div></div><div><flux:text class="text-zinc-500">Mobile number</flux:text><div class="mt-1">{{ $selectedBooking->customer_phone ?: 'Not provided' }}</div></div><div><flux:text class="text-zinc-500">Schedule</flux:text><div class="mt-1">{{ $formatDateTime($selectedBooking->scheduled_at ?: $selectedBooking->created_at) }}</div></div><div><flux:text class="text-zinc-500">Booking type</flux:text><div class="mt-1">{{ \Illuminate\Support\Str::headline($selectedBooking->booking_type) }}</div></div><div><flux:text class="text-zinc-500">Created</flux:text><div class="mt-1">{{ $formatDate($selectedBooking->created_at) }}</div></div><div class="sm:col-span-2"><flux:text class="text-zinc-500">Description</flux:text><div class="mt-1">{{ $selectedBooking->description ?: 'No additional notes.' }}</div></div></div>
             @endif
-            <div class="flex justify-end gap-2">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 @if ($selectedBooking && in_array($selectedBooking->status, \App\Models\Booking::ACTIVE_STATUSES, true))
                     <flux:button variant="danger" icon="x-circle" wire:click="prepareCancellation({{ $selectedBooking->id }})">Cancel booking</flux:button>
                 @endif
@@ -752,7 +911,7 @@
         <form class="space-y-6" wire:submit="cancelWalkIn">
             <div class="space-y-2"><flux:heading size="lg">Cancel Walk-In ticket?</flux:heading><flux:text>Are you sure you want to cancel Walk-In ticket {{ $cancellingWalkInEntry?->queue_number }}? It will remain in your history and your queue slot will become available.</flux:text></div>
             <flux:textarea wire:model="walkInCancellationReason" label="Reason (optional)" rows="3" placeholder="Tell the shop why you are cancelling." />
-            <div class="flex justify-end gap-3"><flux:button type="button" variant="outline" wire:click="closeWalkInCancellation">Keep Ticket</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelWalkIn">Cancel Walk-In</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><flux:button type="button" variant="outline" wire:click="closeWalkInCancellation">Keep Ticket</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelWalkIn">Cancel Walk-In</flux:button></div>
         </form>
     </flux:modal>
 
@@ -760,7 +919,7 @@
         <form class="space-y-6" wire:submit="cancelBooking">
             <div class="space-y-2"><flux:heading size="lg">Cancel booking?</flux:heading><flux:text>This will release the technician assignment. Please tell us why you are cancelling.</flux:text></div>
             <flux:textarea wire:model="cancellationReason" label="Reason" rows="4" required />
-            <div class="flex justify-end gap-3"><flux:button type="button" variant="outline" wire:click="closeCancellation">Keep booking</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelBooking">Confirm cancellation</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><flux:button type="button" variant="outline" wire:click="closeCancellation">Keep booking</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelBooking">Confirm cancellation</flux:button></div>
         </form>
     </flux:modal>
     <flux:modal name="customer-support-conversation" class="max-w-2xl" @close="closeSupportConversation" wire:model="showSupportConversation">

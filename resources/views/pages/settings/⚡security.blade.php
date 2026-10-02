@@ -260,14 +260,14 @@ new #[Title('Security settings')] class extends Component {
                 <div class="mt-6 flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
                     <div class="border rounded-lg border-zinc-200 dark:border-zinc-700 overflow-hidden">
                         @forelse ($passkeys as $passkey)
-                            <div class="flex items-center justify-between p-4 {{ ! $loop->last ? 'border-b border-zinc-200 dark:border-zinc-700' : '' }}">
-                                <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between {{ ! $loop->last ? 'border-b border-zinc-200 dark:border-zinc-700' : '' }}">
+                                <div class="flex min-w-0 items-center gap-3 sm:gap-4">
                                     <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
                                         <flux:icon.key class="size-5 text-zinc-500 dark:text-zinc-400" />
                                     </div>
-                                    <div class="space-y-1">
-                                        <div class="flex items-center gap-2.5">
-                                            <p class="font-medium tracking-tight">{{ $passkey['name'] }}</p>
+                                    <div class="min-w-0 space-y-1">
+                                        <div class="flex flex-wrap items-center gap-2.5">
+                                            <p class="break-words font-medium tracking-tight">{{ $passkey['name'] }}</p>
                                             @if ($passkey['authenticator'])
                                                 <flux:badge size="sm">{{ $passkey['authenticator'] }}</flux:badge>
                                             @endif
@@ -288,7 +288,7 @@ new #[Title('Security settings')] class extends Component {
                                     icon="trash"
                                     icon:variant="outline"
                                     wire:click="confirmDelete({{ $passkey['id'] }})"
-                                    class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
+                                    class="self-end text-red-500 hover:bg-red-50 hover:text-red-600 sm:self-auto dark:hover:bg-red-950/50"
                                 />
                             </div>
                         @empty
@@ -322,7 +322,7 @@ new #[Title('Security settings')] class extends Component {
                 </flux:text>
             </div>
 
-            <div class="flex gap-3 justify-end">
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <flux:button
                     variant="outline"
                     wire:click="closeDeleteModal"

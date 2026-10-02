@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixtrack Dashboard - Modern Redesign</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brandDark: '#1a1a1a',
+                        brandGray: '#f8f9fa',
+                        brandGreen: '#10b981', // Emerald 500 for a professional green
+                        brandAccent: '#e0f2fe', // Light blue for tags
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<!--
+    h-screen w-screen and overflow-hidden prevent scrolling.
+    flex ensures the sidebar and main content sit side-by-side.
+-->
+<body class="h-screen w-screen overflow-hidden flex font-sans bg-brandGray text-gray-800">
+
+    <!-- Left Sidebar -->
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col justify-between flex-shrink-0 h-full">
+
+        <!-- Top: Logo & Nav -->
+        <div class="flex flex-col flex-1 min-h-0 overflow-y-hidden pt-6">
+            <!-- Logo -->
+            <div class="px-6 flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="bg-brandDark text-white h-8 w-8 rounded flex items-center justify-center shadow-sm">
+                        <i class="fa-solid fa-wrench text-sm"></i>
+                    </div>
+                    <span class="font-bold text-lg text-brandDark">FixTrack</span>
+                </div>
+                <button class="text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-table-columns"></i>
+                </button>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 px-4 overflow-y-auto pb-4 space-y-6 flex flex-col gap-1">
+
+                <!-- Home Section -->
+                <div>
+                    <div class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Home</div>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 bg-gray-50 text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-house-chimney w-5 text-gray-500"></i>
+                        Dashboard
+                    </a>
+                </div>
+
+                <!-- Bookings Section -->
+                <div>
+                    <div class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Bookings</div>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-regular fa-calendar-plus w-5"></i> Book a Service
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-list-check w-5"></i> My Bookings
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-person-walking-arrow-right w-5"></i> Walk-in Queue
+                    </a>
+                </div>
+
+                <!-- Service Journey Section -->
+                <div>
+                    <div class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Service Journey</div>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-file-invoice-dollar w-5"></i> Quotations
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-regular fa-credit-card w-5"></i> Payments
+                    </a>
+                </div>
+
+                <!-- Account Section -->
+                <div>
+                    <div class="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Account</div>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-regular fa-star w-5"></i> Ratings & Reviews
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-regular fa-bell w-5"></i> Notifications
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-regular fa-circle-question w-5"></i> Support & Help
+                    </a>
+                    <a href="#" class="flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-brandDark rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-gear w-5"></i> Settings
+                    </a>
+                </div>
+            </nav>
+        </div>
+
+        <!-- Bottom: User Profile -->
+        <div class="p-4 border-t border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors">
+            <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center font-bold text-sm text-gray-600">
+                    SC
+                </div>
+                <span class="text-sm font-semibold text-gray-800">Sample Customer</span>
+            </div>
+            <i class="fa-solid fa-chevron-up text-xs text-gray-400"></i>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative min-w-0 p-8 h-full gap-6">
+
+        <!-- Header -->
+        <header class="flex items-end justify-between flex-shrink-0">
+            <div>
+                <!-- Breadcrumb -->
+                <div class="text-sm text-gray-500 mb-2 flex items-center gap-2">
+                    Customer <i class="fa-solid fa-chevron-right text-[10px]"></i> <span class="text-gray-800 font-medium">Dashboard</span>
+                </div>
+                <!-- Title & Subtitle -->
+                <h1 class="text-3xl font-bold text-gray-900 mb-1">Welcome back, Sample Customer</h1>
+                <p class="text-gray-500 text-sm">Manage your bookings and repair services.</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-3">
+                <button class="px-4 py-2 bg-green-100 text-emerald-800 font-semibold text-sm rounded-lg hover:bg-green-200 transition-colors">
+                    Live overview
+                </button>
+                <button class="px-4 py-2 bg-brandDark text-white font-semibold text-sm rounded-lg hover:bg-gray-800 transition-colors shadow-sm">
+                    + Book a technician
+                </button>
+            </div>
+        </header>
+
+        <!-- Center Flex Area: Two Large Cards (Takes remaining height) -->
+        <div class="flex-1 flex gap-6 min-h-0">
+
+            <!-- Left Card: Current Booking -->
+            <div class="flex-1 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col relative overflow-hidden group">
+                <!-- Card Header -->
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <h2 class="font-bold text-gray-900 text-lg">Current booking</h2>
+                        <p class="text-xs text-gray-500">Follow the next step in your home service.</p>
+                    </div>
+                    <button class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                </div>
+
+                <!-- Card Content (Empty State like screenshot) -->
+                <div class="flex-1 flex flex-col items-center justify-center text-center">
+                    <div class="h-16 w-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-400">
+                        <i class="fa-solid fa-screwdriver-wrench text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-800 text-md mb-1">No active service</h3>
+                    <p class="text-sm text-gray-500 mb-6 max-w-xs">Book a technician when your home needs a hand.</p>
+                    <button class="px-5 py-2.5 bg-brandDark text-white font-semibold text-sm rounded-lg hover:bg-gray-800 transition-colors shadow-sm">
+                        + Book a service
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Card: Top 5 Categories Recommended -->
+            <div class="flex-1 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col relative overflow-hidden">
+                <!-- Card Header -->
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="font-bold text-gray-900 text-lg">Top 5 Categories Recommended</h2>
+                        <p class="text-xs text-gray-500">Services that match your profile.</p>
+                    </div>
+                    <button class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                </div>
+
+                <!-- Card Content (Mock List) -->
+                <div class="flex-1 flex flex-col gap-3 overflow-y-auto pr-2">
+                    <!-- Recommendation Item -->
+                    <div class="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="h-10 w-10 bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center">
+                                <i class="fa-solid fa-snowflake"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm text-gray-800">Air Conditioning</h4>
+                                <p class="text-xs text-gray-500">Cleaning & Repair</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 text-sm"></i>
+                    </div>
+                    <!-- Recommendation Item -->
+                    <div class="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="h-10 w-10 bg-orange-50 text-orange-500 rounded-lg flex items-center justify-center">
+                                <i class="fa-solid fa-fire-burner"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm text-gray-800">Kitchen Appliances</h4>
+                                <p class="text-xs text-gray-500">Oven & Stove Repair</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 text-sm"></i>
+                    </div>
+                    <!-- Recommendation Item -->
+                    <div class="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div class="flex items-center gap-4">
+                            <div class="h-10 w-10 bg-purple-50 text-purple-500 rounded-lg flex items-center justify-center">
+                                <i class="fa-solid fa-plug"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-sm text-gray-800">Electrical Setup</h4>
+                                <p class="text-xs text-gray-500">Wiring & Fixtures</p>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-arrow-right text-gray-300 text-sm"></i>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Bottom Row: Prominent Booking Action Buttons -->
+        <div class="flex-none flex items-center justify-center gap-6 lg:gap-12 w-full pt-4 pb-2">
+
+            <!-- Manual Booking Pill -->
+            <button class="flex-1 max-w-[300px] h-16 bg-white border border-gray-200 rounded-full flex items-center justify-center gap-3 font-bold text-gray-700 shadow-sm hover:shadow-md hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+                <i class="fa-regular fa-calendar-check text-xl text-gray-400"></i>
+                <span>Manual Booking</span>
+            </button>
+
+            <!-- Quick Book Circle -->
+            <button class="h-36 w-36 bg-brandGreen rounded-full flex flex-col items-center justify-center text-white shadow-lg hover:shadow-xl hover:bg-emerald-400 hover:scale-105 transition-all duration-300 flex-shrink-0 z-10 border-4 border-white">
+                <i class="fa-solid fa-bolt text-2xl mb-1"></i>
+                <span class="font-bold text-xl leading-tight">Quick<br>Book</span>
+            </button>
+
+            <!-- Walk In Booking Pill -->
+            <button class="flex-1 max-w-[300px] h-16 bg-white border border-gray-200 rounded-full flex items-center justify-center gap-3 font-bold text-gray-700 shadow-sm hover:shadow-md hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+                <i class="fa-solid fa-person-walking text-xl text-gray-400"></i>
+                <span>Walk In Booking</span>
+            </button>
+
+        </div>
+
+        <!-- Chatbot FAB -->
+        <button id="chatToggleBtn" class="absolute bottom-6 right-6 h-16 w-16 bg-blue-500 rounded-full rounded-br-[4px] shadow-lg flex items-center justify-center text-white hover:bg-blue-600 hover:scale-105 transition-all z-50 cursor-pointer">
+            <i class="fa-solid fa-robot text-3xl"></i>
+        </button>
+
+        <!-- Chat Widget Window -->
+        <div id="chatWidget" class="absolute bottom-28 right-6 w-[400px] h-[500px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex overflow-hidden z-50 transform transition-all duration-300 origin-bottom-right scale-0 opacity-0 pointer-events-none">
+
+            <!-- Left Mini Sidebar (Chat Heads) -->
+            <div class="w-16 bg-gray-50 border-r border-gray-100 flex flex-col items-center py-4 gap-4 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.02)] overflow-y-auto" id="chatSidebar">
+                <!-- Bot Teardrop Icon (Fixed) -->
+                <div class="chat-head relative h-10 w-10 bg-blue-500 rounded-full rounded-br-[4px] flex items-center justify-center text-white shadow-sm cursor-pointer shrink-0 border-2 border-blue-200 ring-2 ring-blue-500" data-target="botChatView" onclick="switchChatView('botChatView', this)">
+                    <i class="fa-solid fa-robot text-lg"></i>
+                </div>
+
+                <!-- Dynamic Technician Chat Heads will be inserted here -->
+
+                <!-- Plus Icon (Moves down automatically as items are added above it) -->
+                <button id="addChatBtn" class="h-10 w-10 rounded-full border-2 border-black flex items-center justify-center hover:bg-gray-200 transition-colors shrink-0 mt-2">
+                    <i class="fa-solid fa-plus text-black text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Main Chat Area Container -->
+            <div class="flex-1 flex flex-col bg-white relative">
+
+                <!-- VIEW 1: Main Support Bot Chat -->
+                <div id="botChatView" class="chat-view absolute inset-0 flex flex-col bg-white z-10 transition-opacity duration-200">
+                    <!-- Chat Header -->
+                    <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-white shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                            <span class="font-semibold text-gray-800 text-sm">FixTrack Support</span>
+                        </div>
+                        <button class="closeChatBtn text-gray-400 hover:text-gray-600 transition-colors">
+                            <i class="fa-solid fa-xmark text-xl"></i>
+                        </button>
+                    </div>
+
+                    <!-- Chat Messages Area -->
+                    <div class="flex-1 p-4 overflow-y-auto flex flex-col gap-5 bg-gray-50/50">
+                        <div class="flex flex-col gap-1 items-start max-w-[85%]">
+                            <span class="text-[10px] text-gray-400 ml-1 font-medium">FixBot • 1:52 PM</span>
+                            <div class="bg-white border border-gray-100 shadow-sm text-gray-700 p-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed">
+                                Hi Sample Customer! 👋 Welcome back to FixTrack. How can I help you today?
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input Area -->
+                    <div class="p-4 border-t border-gray-100 bg-white">
+                        <div class="flex items-center gap-3 bg-gray-100 rounded-full px-4 py-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:bg-white transition-all border border-transparent focus-within:border-blue-300">
+                            <input type="text" placeholder="Type your message..." class="flex-1 bg-transparent border-none focus:outline-none text-sm text-gray-700 placeholder-gray-500">
+                            <button class="text-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Technician Selection List (Hidden by default) -->
+                <div id="techSelectionView" class="chat-view absolute inset-0 flex flex-col bg-white z-20 opacity-0 pointer-events-none transition-opacity duration-200">
+                    <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-white shadow-sm">
+                        <span class="font-bold text-gray-800 text-sm">New Conversation</span>
+                        <button id="cancelSelectionBtn" class="text-gray-400 hover:text-gray-600 transition-colors">
+                            <i class="fa-solid fa-arrow-left"></i>
+                        </button>
+                    </div>
+                    <div class="flex-1 p-2 overflow-y-auto flex flex-col gap-1 bg-gray-50/50">
+                        <div class="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase">Available Technicians</div>
+
+                        <!-- Tech Option 1 -->
+                        <button class="tech-option flex items-center gap-3 p-3 hover:bg-white hover:shadow-sm rounded-xl transition-all text-left" onclick="openTechChat('tech1', 'Michael Davis', 'bg-orange-100', 'text-orange-600', 'fa-user-gear')">
+                            <div class="h-10 w-10 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-user-gear"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm">Michael Davis</div>
+                                <div class="text-xs text-gray-500">Appliance Specialist</div>
+                            </div>
+                        </button>
+
+                        <!-- Tech Option 2 -->
+                        <button class="tech-option flex items-center gap-3 p-3 hover:bg-white hover:shadow-sm rounded-xl transition-all text-left" onclick="openTechChat('tech2', 'Sarah Jones', 'bg-purple-100', 'text-purple-600', 'fa-bolt')">
+                            <div class="h-10 w-10 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-bolt"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm">Sarah Jones</div>
+                                <div class="text-xs text-gray-500">Master Electrician</div>
+                            </div>
+                        </button>
+
+                        <!-- Tech Option 3 -->
+                        <button class="tech-option flex items-center gap-3 p-3 hover:bg-white hover:shadow-sm rounded-xl transition-all text-left" onclick="openTechChat('tech3', 'David Smith', 'bg-emerald-100', 'text-emerald-600', 'fa-droplet')">
+                            <div class="h-10 w-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
+                                <i class="fa-solid fa-droplet"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm">David Smith</div>
+                                <div class="text-xs text-gray-500">Plumbing Expert</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Container for dynamically generated technician chat views -->
+                <div id="dynamicChatsContainer"></div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // DOM Elements
+        const chatToggleBtn = document.getElementById('chatToggleBtn');
+        const chatWidget = document.getElementById('chatWidget');
+        const addChatBtn = document.getElementById('addChatBtn');
+        const techSelectionView = document.getElementById('techSelectionView');
+        const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+        const dynamicChatsContainer = document.getElementById('dynamicChatsContainer');
+        const chatSidebar = document.getElementById('chatSidebar');
+
+        // State
+        let activeChatIds = new Set(); // Keep track of open tech chats
+
+        // Main Widget Toggle
+        chatToggleBtn.addEventListener('click', toggleChatWidget);
+        document.querySelectorAll('.closeChatBtn').forEach(btn => btn.addEventListener('click', toggleChatWidget));
+
+        function toggleChatWidget() {
+            if (chatWidget.classList.contains('scale-0')) {
+                chatWidget.classList.remove('scale-0', 'opacity-0', 'pointer-events-none');
+                chatWidget.classList.add('scale-100', 'opacity-100');
+            } else {
+                chatWidget.classList.add('scale-0', 'opacity-0', 'pointer-events-none');
+                chatWidget.classList.remove('scale-100', 'opacity-100');
+                // Reset to bot view when closing widget
+                hideSelectionView();
+                switchChatView('botChatView', document.querySelector('[data-target="botChatView"]'));
+            }
+        }
+
+        // Open Technician Selection View
+        addChatBtn.addEventListener('click', () => {
+            // Hide all other views, show selection view
+            document.querySelectorAll('.chat-view').forEach(view => {
+                view.classList.add('opacity-0', 'pointer-events-none');
+                view.classList.remove('z-30');
+            });
+            techSelectionView.classList.remove('opacity-0', 'pointer-events-none');
+            techSelectionView.classList.add('z-30'); // Bring to front
+            removeActiveStateFromHeads();
+        });
+
+        cancelSelectionBtn.addEventListener('click', () => {
+            hideSelectionView();
+            // Default back to bot
+            switchChatView('botChatView', document.querySelector('[data-target="botChatView"]'));
+        });
+
+        function hideSelectionView() {
+            techSelectionView.classList.add('opacity-0', 'pointer-events-none');
+            techSelectionView.classList.remove('z-30');
+        }
+
+        // Handle opening a specific technician chat
+        function openTechChat(techId, techName, bgClass, textClass, iconClass) {
+            const viewId = `${techId}ChatView`;
+
+            if (!activeChatIds.has(techId)) {
+                activeChatIds.add(techId);
+
+                // 1. Create the Chat Head (with permanently visible X button)
+                const head = document.createElement('div');
+                head.id = `head-${techId}`;
+                head.className = `chat-head relative h-10 w-10 ${bgClass} rounded-full flex items-center justify-center ${textClass} shadow-sm cursor-pointer shrink-0 border-2 border-transparent transition-all`;
+                head.dataset.target = viewId;
+                head.onclick = function() { switchChatView(viewId, this); };
+
+                head.innerHTML = `
+                    <i class="fa-solid ${iconClass} text-lg"></i>
+                    <!-- Fixed X Button: Permanently displayed on top-right -->
+                    <button class="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] hover:bg-red-600 border border-white shadow-sm z-10" onclick="closeTechChat(event, '${techId}')">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                `;
+
+                // Insert right before the Add button to maintain order
+                chatSidebar.insertBefore(head, addChatBtn);
+
+                // 2. Create the Chat View
+                const view = document.createElement('div');
+                view.id = viewId;
+                view.className = `chat-view absolute inset-0 flex flex-col bg-white z-10 opacity-0 pointer-events-none transition-opacity duration-200`;
+                view.innerHTML = `
+                    <div class="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-white shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="h-6 w-6 ${bgClass} ${textClass} rounded-full flex items-center justify-center"><i class="fa-solid ${iconClass} text-xs"></i></div>
+                            <span class="font-semibold text-gray-800 text-sm">${techName}</span>
+                        </div>
+                        <button class="text-gray-400 hover:text-gray-600 transition-colors" onclick="toggleChatWidget()">
+                            <i class="fa-solid fa-xmark text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="flex-1 p-4 overflow-y-auto flex flex-col gap-5 bg-gray-50/50 justify-end pb-6">
+                        <div class="text-center text-xs text-gray-400 my-4">You are now connected with ${techName}</div>
+                        <!-- Example message -->
+                        <div class="flex flex-col gap-1 items-start max-w-[85%]">
+                            <div class="bg-white border border-gray-100 shadow-sm text-gray-700 p-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed">
+                                Hello! I'm reviewing your request now. I can be there by 3:00 PM.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-gray-100 bg-white">
+                        <div class="flex items-center gap-3 bg-gray-100 rounded-full px-4 py-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:bg-white transition-all border border-transparent focus-within:border-blue-300">
+                            <input type="text" placeholder="Message ${techName}..." class="flex-1 bg-transparent border-none focus:outline-none text-sm text-gray-700 placeholder-gray-500">
+                            <button class="text-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                dynamicChatsContainer.appendChild(view);
+            }
+
+            // Switch to the newly created or existing view
+            hideSelectionView();
+            switchChatView(viewId, document.getElementById(`head-${techId}`));
+        }
+
+        // Close a technician chat
+        function closeTechChat(event, techId) {
+            event.stopPropagation(); // Prevent clicking the chat head behind the X
+
+            activeChatIds.delete(techId);
+
+            // Remove elements
+            const head = document.getElementById(`head-${techId}`);
+            const view = document.getElementById(`${techId}ChatView`);
+            if (head) head.remove();
+            if (view) view.remove();
+
+            // Default back to bot chat
+            switchChatView('botChatView', document.querySelector('[data-target="botChatView"]'));
+        }
+
+        // Switching logic for views
+        function switchChatView(targetViewId, clickedHeadElement) {
+            // Hide selection view just in case
+            hideSelectionView();
+
+            // 1. Hide all views
+            document.querySelectorAll('.chat-view').forEach(view => {
+                if (view.id !== 'techSelectionView') { // handled separately
+                    view.classList.add('opacity-0', 'pointer-events-none');
+                    view.classList.remove('z-20');
+                }
+            });
+
+            // 2. Show target view
+            const targetView = document.getElementById(targetViewId);
+            if (targetView) {
+                targetView.classList.remove('opacity-0', 'pointer-events-none');
+                targetView.classList.add('z-20');
+            }
+
+            // 3. Update styling of Chat Heads to show which is active
+            removeActiveStateFromHeads();
+            if (clickedHeadElement) {
+                if (targetViewId === 'botChatView') {
+                    clickedHeadElement.classList.add('border-blue-200', 'ring-2', 'ring-blue-500');
+                } else {
+                    clickedHeadElement.classList.add('border-gray-300', 'ring-2', 'ring-gray-400');
+                }
+            }
+        }
+
+        function removeActiveStateFromHeads() {
+            document.querySelectorAll('.chat-head').forEach(head => {
+                head.classList.remove('border-blue-200', 'ring-2', 'ring-blue-500', 'border-gray-300', 'ring-gray-400');
+                head.classList.add('border-transparent');
+            });
+        }
+    </script>
+</body>
+</html>

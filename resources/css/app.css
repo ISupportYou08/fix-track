@@ -1538,6 +1538,163 @@ dialog[data-modal][data-flux-modal-overflow] [data-flux-modal-content] > :first-
     }
 }
 
+/* Phone layout contract shared by every authenticated workspace and modal. */
+@media (max-width: 47.999rem) {
+    html,
+    body {
+        max-width: 100%;
+        overflow-x: clip;
+    }
+
+    [data-app-main],
+    [data-app-responsive-page],
+    [data-settings-page],
+    [data-flux-card] {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    input:not([type='checkbox']):not([type='radio']),
+    textarea,
+    select {
+        font-size: 1rem;
+    }
+
+    [data-flux-button],
+    [data-flux-navlist-item],
+    [data-flux-menu-item] {
+        min-height: 2.75rem;
+    }
+
+    [data-app-mobile-header] {
+        padding-top: max(0.25rem, env(safe-area-inset-top));
+    }
+
+    [data-app-mobile-navigation] {
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+
+    [data-app-page-header] {
+        align-items: stretch;
+    }
+
+    [data-app-page-actions] {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    [data-app-page-actions] > [data-flux-button],
+    [data-app-page-actions] > a,
+    [data-app-page-actions] > button {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    .app-mobile-action-group {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .app-mobile-action-group > [data-flux-button],
+    .app-mobile-action-group > button,
+    .app-mobile-action-group > a {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .app-table-shell,
+    .super-admin-scroll-table {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto !important;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .app-table-shell ui-table-scroll-area,
+    .super-admin-scroll-table ui-table-scroll-area {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .app-table-shell [data-flux-table] {
+        min-width: 42rem;
+    }
+
+    [data-flux-table] [data-flux-column],
+    [data-flux-table] [data-flux-cell] {
+        padding-inline: 0.75rem;
+    }
+
+    [data-flux-table] [data-flux-column]:first-child,
+    [data-flux-table] [data-flux-cell]:first-child {
+        padding-inline-start: 1rem;
+    }
+
+    [data-flux-table] [data-flux-column]:last-child,
+    [data-flux-table] [data-flux-cell]:last-child {
+        padding-inline-end: 1rem;
+    }
+
+    dialog[data-modal] {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem) !important;
+        max-height: calc(100dvh - 1rem) !important;
+        margin: 0.5rem auto !important;
+        overscroll-behavior: contain;
+    }
+
+    dialog[data-modal] > :first-child,
+    dialog[data-modal][data-flux-modal-overflow] [data-flux-modal-content] {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    dialog[data-modal]:not([data-flux-modal-overflow]) > :first-child,
+    dialog[data-modal][data-flux-modal-overflow] [data-flux-modal-content] > :first-child {
+        padding-inline-end: 3rem;
+    }
+
+    dialog[data-modal='customer-booking-flow'] {
+        width: calc(100vw - 1rem) !important;
+        max-width: calc(100vw - 1rem) !important;
+        max-height: calc(100dvh - 1rem) !important;
+    }
+
+    [data-customer-registration-form],
+    [data-technician-registration-form] {
+        padding-top: max(0.75rem, env(safe-area-inset-top));
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    [data-customer-registration-form] > div:last-child,
+    [data-technician-registration-form] > div:last-child {
+        max-height: calc(100dvh - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+        border-radius: 1.25rem;
+    }
+
+    .customer-mobile-map,
+    .technician-mobile-map {
+        min-height: 18rem;
+    }
+
+    .customer-mobile-shell--fixed-home,
+    .technician-mobile-shell--fixed-home {
+        height: calc(100dvh - 4.5rem - max(0.5rem, env(safe-area-inset-bottom)) - 1px);
+    }
+
+    .settings-page-content,
+    .settings-page-content form,
+    .settings-page-content [data-flux-field] {
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
 /* Keep long Super Admin tables scrollable while their headers remain visible. */
 .app-table-shell ui-table-scroll-area,
 .super-admin-scroll-table ui-table-scroll-area {

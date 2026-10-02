@@ -31,13 +31,13 @@
             <flux:breadcrumbs.item>{{ $module['label'] }}</flux:breadcrumbs.item>
         </flux:breadcrumbs>
 
-        <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-4" data-app-page-header>
             <div class="min-w-0">
                 <flux:heading size="xl" level="1">{{ $module['label'] }}</flux:heading>
                 <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">{{ $module['description'] }}</flux:text>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2" data-app-page-actions>
                 <flux:badge :color="$moduleState['color']" size="lg">{{ $moduleState['label'] }}</flux:badge>
                 @if ($moduleSlug === 'overview' || $moduleSlug === 'job-requests')
                     <flux:button
@@ -415,6 +415,17 @@
                     <flux:text class="mt-1 text-zinc-500 dark:text-zinc-400">{{ \Illuminate\Support\Str::headline($selectedRequest->booking_type) }} booking</flux:text>
                 </div>
 
+                @if ($selectedRequest->itemAnalysis)
+                    <div class="grid gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:grid-cols-[8rem_minmax(0,1fr)] dark:border-emerald-500/30 dark:bg-emerald-500/10" data-technician-item-analysis>
+                        <div class="grid grid-cols-2 gap-2 sm:grid-cols-1">
+                            @foreach ($selectedRequest->itemAnalysis->imageFiles() as $index => $image)
+                                <img wire:key="technician-analysis-image-{{ $index }}" src="{{ route('booking-item-analyses.image', ['analysis' => $selectedRequest->itemAnalysis, 'image' => $index]) }}" alt="View {{ $index + 1 }} of {{ $selectedRequest->itemAnalysis->detected_item_name }}" class="aspect-square w-full rounded-xl object-cover" />
+                            @endforeach
+                        </div>
+                        <div><flux:text class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">AI identified item</flux:text><flux:heading size="md" class="mt-1">{{ $selectedRequest->itemAnalysis->detected_item_name }}</flux:heading><p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{{ $selectedRequest->itemAnalysis->explanation }}</p><flux:badge color="emerald" size="sm" class="mt-3">Customer confirmed</flux:badge></div>
+                    </div>
+                @endif
+
                 <div class="grid gap-4 text-sm sm:grid-cols-2">
                     <div><flux:text class="text-zinc-500">Customer</flux:text><div class="mt-1 font-medium">{{ $selectedRequest->customer_name ?: $selectedRequest->customer?->name ?: 'Not provided' }}</div></div>
                     <div><flux:text class="text-zinc-500">Contact number</flux:text><div class="mt-1">{{ $selectedRequest->customer_phone ?: 'Not provided' }}</div></div>
@@ -522,7 +533,7 @@
         <form class="space-y-6" wire:submit="cancelSelectedWalkIn">
             <div class="space-y-2"><flux:heading size="lg">Cancel Walk-In ticket?</flux:heading><flux:text>The ticket will remain in history and the customer will see the cancellation.</flux:text></div>
             <flux:textarea wire:model="walkInCancellationReason" label="Cancellation reason" rows="3" placeholder="Example: Technician unavailable." required />
-            <div class="flex justify-end gap-3"><flux:button type="button" variant="outline" wire:click="closeWalkInCancellation">Keep Ticket</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelSelectedWalkIn">Cancel Ticket</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><flux:button type="button" variant="outline" wire:click="closeWalkInCancellation">Keep Ticket</flux:button><flux:button type="submit" variant="danger" wire:loading.attr="disabled" wire:target="cancelSelectedWalkIn">Cancel Ticket</flux:button></div>
         </form>
     </flux:modal>
 
@@ -531,14 +542,14 @@
             <div class="space-y-2"><flux:heading size="lg">Create quotation</flux:heading><flux:text>Record the assessment and send the total to the customer for approval.</flux:text></div>
             <flux:textarea wire:model="assessmentNotes" label="Assessment notes" rows="4" required />
             <div class="grid gap-4 sm:grid-cols-2"><flux:input wire:model="laborAmount" label="Labor amount" type="number" min="0" step="0.01" required /><flux:input wire:model="materialsAmount" label="Materials amount" type="number" min="0" step="0.01" required /></div>
-            <div class="flex justify-end gap-3"><flux:button type="button" variant="outline" wire:click="closeQuotation">Cancel</flux:button><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="saveQuotation">Send quotation</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><flux:button type="button" variant="outline" wire:click="closeQuotation">Cancel</flux:button><flux:button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="saveQuotation">Send quotation</flux:button></div>
         </form>
     </flux:modal>
 
     <flux:modal name="technician-confirmation-modal" class="max-w-md" @close="cancelConfirmation" wire:model="showConfirmation" data-technician-confirmation-modal>
         <div class="space-y-6">
             <div class="space-y-2"><flux:heading size="lg">{{ $confirmationTitle }}</flux:heading><flux:text>{{ $confirmationDescription }}</flux:text></div>
-            <div class="flex justify-end gap-3"><flux:button variant="outline" wire:click="cancelConfirmation">Cancel</flux:button><flux:button :variant="$confirmationVariant" wire:click="executeConfirmedAction" wire:loading.attr="disabled" wire:target="executeConfirmedAction">{{ $confirmationActionLabel }}</flux:button></div>
+            <div class="app-mobile-action-group flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><flux:button variant="outline" wire:click="cancelConfirmation">Cancel</flux:button><flux:button :variant="$confirmationVariant" wire:click="executeConfirmedAction" wire:loading.attr="disabled" wire:target="executeConfirmedAction">{{ $confirmationActionLabel }}</flux:button></div>
         </div>
     </flux:modal>
 </div>

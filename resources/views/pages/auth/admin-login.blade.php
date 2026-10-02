@@ -6,9 +6,9 @@
 @endphp
 
 <x-layouts::auth.admin :title="$portalTitle">
-    <main class="grid min-h-screen place-items-center p-4 sm:p-6 lg:p-8" data-test="{{ $isStaffPortal ? 'staff-login-page' : 'admin-login-page' }}">
-        <div class="grid w-full max-w-6xl overflow-hidden rounded-[2.5rem] border border-white/50 bg-white/10 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.4)] backdrop-blur-sm lg:grid-cols-[5fr_7fr]">
-            <section class="border-b border-white/15 bg-black/40 px-8 py-12 text-white backdrop-blur-xl lg:border-b-0 lg:border-r lg:px-12 lg:py-16" aria-labelledby="admin-portal-heading">
+    <main class="grid min-h-dvh place-items-center p-3 sm:p-6 lg:p-8" data-test="{{ $isStaffPortal ? 'staff-login-page' : 'admin-login-page' }}">
+        <div class="grid w-full max-w-6xl overflow-hidden rounded-2xl border border-white/50 bg-white/10 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.4)] backdrop-blur-sm sm:rounded-[2.5rem] lg:grid-cols-[5fr_7fr]">
+            <section class="hidden border-b border-white/15 bg-black/40 px-8 py-12 text-white backdrop-blur-xl lg:block lg:border-b-0 lg:border-r lg:px-12 lg:py-16" aria-labelledby="admin-portal-heading">
                 <div class="mx-auto w-full max-w-md lg:mx-0">
                     <a href="{{ route('home') }}" class="inline-flex items-center gap-3">
                         <span class="grid size-10 place-items-center rounded-xl border border-white/20 bg-white/10 text-xl font-bold tracking-tighter shadow-lg backdrop-blur-md" aria-hidden="true">F</span>
@@ -60,11 +60,11 @@
                 </div>
             </section>
 
-            <section class="grid place-items-center bg-white/40 px-6 py-12 backdrop-blur-xl sm:px-8 lg:px-12" aria-labelledby="admin-sign-in-heading">
+            <section class="grid min-h-[calc(100dvh-1.5rem)] place-items-center bg-white/40 px-3 py-6 backdrop-blur-xl sm:min-h-0 sm:px-8 sm:py-12 lg:px-12" aria-labelledby="admin-sign-in-heading">
                 <div class="w-full max-w-[460px]">
-                    <div class="rounded-[2rem] border border-white/90 bg-white/80 p-8 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.2)] backdrop-blur-2xl sm:p-10">
+                    <div class="rounded-2xl border border-white/90 bg-white/80 p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.2)] backdrop-blur-2xl sm:rounded-[2rem] sm:p-10">
                         <div class="flex items-center justify-between gap-4">
-                            <h2 id="admin-sign-in-heading" class="text-3xl font-extrabold tracking-tight text-slate-900">{{ $isStaffPortal ? __('Staff Sign In') : __('Admin Sign In') }}</h2>
+                            <h2 id="admin-sign-in-heading" class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">{{ $isStaffPortal ? __('Staff Sign In') : __('Admin Sign In') }}</h2>
                             <div class="grid size-12 shrink-0 place-items-center rounded-xl border border-white/90 bg-white/90 text-slate-800 shadow-sm" aria-hidden="true">
                                 <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />

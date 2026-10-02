@@ -7,6 +7,7 @@
         ['bg-emerald-50', 'text-emerald-500'],
         ['bg-rose-50', 'text-rose-500'],
     ];
+    $serviceIcons = ['sparkles', 'fire', 'bolt', 'wrench-screwdriver', 'home-modern'];
 @endphp
 
 <section class="relative hidden h-dvh min-h-0 w-full flex-col gap-6 overflow-hidden bg-[#f8f9fa] p-8 font-sans text-gray-800 lg:flex" data-customer-reference-dashboard>
@@ -21,12 +22,7 @@
             <p class="text-sm text-gray-500">Manage your bookings and repair services.</p>
         </div>
 
-        <div class="flex items-center gap-3">
-            <span class="rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-emerald-800">Live overview</span>
-            <button type="button" wire:click="startBooking" class="rounded-lg bg-[#1a1a1a] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-800">
-                + Book a technician
-            </button>
-        </div>
+        <span class="rounded-lg bg-green-100 px-4 py-2 text-sm font-semibold text-emerald-800">Live overview</span>
     </header>
 
     <div class="flex min-h-0 flex-1 gap-6">
@@ -87,8 +83,7 @@
                 <div class="flex flex-1 flex-col items-center justify-center text-center">
                     <span class="mb-4 flex size-16 items-center justify-center rounded-full bg-gray-50 text-gray-400"><flux:icon name="wrench-screwdriver" class="size-7" /></span>
                     <h3 class="mb-1 font-bold text-gray-800">No active service</h3>
-                    <p class="mb-6 max-w-xs text-sm text-gray-500">Book a technician when your home needs a hand.</p>
-                    <button type="button" wire:click="startBooking" class="rounded-lg bg-[#1a1a1a] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-800">+ Book a service</button>
+                    <p class="max-w-xs text-sm text-gray-500">Book a technician when your home needs a hand.</p>
                 </div>
             @endif
         </article>
@@ -105,9 +100,9 @@
             <div class="flex flex-1 flex-col gap-3 overflow-y-auto pr-2">
                 @forelse ($content['popularServices'] as $index => $service)
                     @php [$serviceBackground, $serviceText] = $serviceColors[$index % count($serviceColors)]; @endphp
-                    <button type="button" wire:key="recommended-service-{{ $service->code }}" wire:click="startBooking('{{ $service->code }}')" class="flex items-center justify-between rounded-xl border border-gray-100 p-3 text-left transition-colors hover:bg-gray-50">
+                    <button type="button" wire:key="recommended-service-{{ $service->code }}" wire:click="startBooking('{{ $service->code }}')" class="flex items-center justify-between rounded-xl border border-gray-100 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-200 hover:bg-gray-50 hover:shadow-sm">
                         <span class="flex min-w-0 items-center gap-4">
-                            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg {{ $serviceBackground }} {{ $serviceText }}"><flux:icon name="wrench-screwdriver" class="size-5" /></span>
+                            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg {{ $serviceBackground }} {{ $serviceText }}"><flux:icon :name="$serviceIcons[$index % count($serviceIcons)]" class="size-5" /></span>
                             <span class="min-w-0">
                                 <span class="block truncate text-sm font-semibold text-gray-800">{{ $service->name }}</span>
                                 <span class="block truncate text-xs text-gray-500">{{ $service->description ?: $service->category }}</span>
@@ -122,20 +117,37 @@
         </article>
     </div>
 
-    <div x-data="{ messagesOpen: false }" x-on:keydown.escape.window="messagesOpen = false" class="fixed bottom-6 right-6 z-50">
-        <div id="customer-dashboard-messages" x-show="messagesOpen" x-cloak x-transition.origin.bottom.right role="region" aria-label="Messages" data-customer-message-panel class="absolute bottom-20 right-0 flex h-[min(42rem,calc(100dvh-7rem))] w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/95 shadow-[0_28px_80px_-24px_rgba(15,23,42,0.38)] ring-1 ring-slate-950/5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95 dark:ring-white/10">
-            <div data-chat-panel-header class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/70 bg-gradient-to-r from-white via-white to-indigo-50/70 px-5 py-4 dark:border-white/10 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/50">
-                <div class="flex min-w-0 items-center gap-3">
-                    <span class="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-[0_8px_20px_-8px_rgba(15,23,42,0.65)] dark:bg-indigo-500"><flux:icon name="chat-bubble-left-right" class="size-5" /></span>
-                    <div class="min-w-0"><p class="text-[15px] font-semibold tracking-tight text-slate-950 dark:text-white">Messages</p><p class="truncate text-xs text-slate-500 dark:text-slate-400">Assistant and accepted bookings</p></div>
+    <div class="flex w-full flex-none items-center justify-center gap-6 pb-2 pt-4 lg:gap-12" data-customer-dashboard-booking-actions>
+        <button type="button" wire:click="openBookingFlow('manual')" data-customer-dashboard-action="manual" class="flex h-16 max-w-[300px] flex-1 items-center justify-center gap-3 rounded-full border border-gray-200 bg-white font-bold text-gray-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-800">
+            <flux:icon name="calendar-days" class="size-6 text-gray-400" />
+            <span>Manual Booking</span>
+        </button>
+
+        <button type="button" wire:click="openAiBookingFlow" data-customer-dashboard-action="ai" class="z-10 flex size-36 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-emerald-500 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-emerald-400 hover:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-600" aria-label="Scan or upload an item image">
+            <flux:icon name="camera" class="mb-1 size-7" />
+            <span class="text-xl font-bold leading-tight">AI<br>Scan</span>
+        </button>
+
+        <button type="button" wire:click="openWalkInBookingFlow" data-customer-dashboard-action="walk-in" class="flex h-16 max-w-[300px] flex-1 items-center justify-center gap-3 rounded-full border border-gray-200 bg-white font-bold text-gray-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gray-800">
+            <flux:icon name="queue-list" class="size-6 text-gray-400" />
+            <span>Walk In Booking</span>
+        </button>
+    </div>
+
+    <div x-data="{ messagesOpen: false }" x-on:keydown.escape.window="messagesOpen = false" class="fixed bottom-6 right-6 z-50" data-customer-reference-chat-widget>
+        <div id="customer-dashboard-messages" x-show="messagesOpen" x-cloak x-transition.origin.bottom.right role="region" aria-label="FixTrack Support" data-customer-message-panel class="absolute bottom-28 right-0 flex h-[min(500px,calc(100dvh-7rem))] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-950">
+            <div data-chat-panel-header class="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3 shadow-sm dark:border-white/10 dark:bg-slate-950">
+                <div class="flex min-w-0 items-center gap-2.5">
+                    <span class="size-2 shrink-0 animate-pulse rounded-full bg-emerald-500"></span>
+                    <div class="min-w-0"><p class="text-sm font-semibold text-gray-800 dark:text-white">FixTrack Support</p><p class="truncate text-xs text-gray-500 dark:text-slate-400">Assistant and accepted booking chats</p></div>
                 </div>
-                <button type="button" x-on:click="messagesOpen = false" class="flex size-9 shrink-0 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Close messages"><flux:icon name="x-mark" class="size-4" /></button>
+                <button type="button" x-on:click="messagesOpen = false" class="flex size-8 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:hover:bg-white/10 dark:hover:text-white" aria-label="Close messages"><flux:icon name="x-mark" class="size-5" /></button>
             </div>
             <div class="min-h-0 flex-1"><livewire:booking-messenger :compact="true" :key="'customer-dashboard-messenger'" /></div>
         </div>
 
-        <button type="button" x-on:click="messagesOpen = ! messagesOpen" x-bind:aria-expanded="messagesOpen.toString()" aria-controls="customer-dashboard-messages" class="group relative flex size-16 items-center justify-center rounded-[1.4rem] border border-white/20 bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-700 text-white shadow-[0_16px_36px_-10px_rgba(79,70,229,0.7)] ring-4 ring-white/80 transition duration-200 hover:-translate-y-1 hover:shadow-[0_20px_40px_-10px_rgba(79,70,229,0.8)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600 dark:ring-slate-900" aria-label="{{ __('Open messages') }}">
-            <flux:icon name="chat-bubble-left-right" class="size-7 transition-transform group-hover:scale-110" />
+        <button type="button" x-on:click="messagesOpen = ! messagesOpen" x-bind:aria-expanded="messagesOpen.toString()" aria-controls="customer-dashboard-messages" class="group relative flex size-16 cursor-pointer items-center justify-center rounded-full rounded-br-[4px] bg-blue-500 text-white shadow-lg transition-all duration-200 hover:scale-105 hover:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600" aria-label="{{ __('Open FixTrack Support') }}">
+            <flux:icon name="chat-bubble-left-right" class="size-8 transition-transform group-hover:scale-110" />
         </button>
     </div>
 </section>

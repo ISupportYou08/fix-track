@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Customer;
 
+use App\Actions\Bookings\AnalyzeServiceItemImage;
 use App\Actions\WalkIns\CreateWalkInEntry;
 use App\Concerns\HandlesProfilePhoto;
 use App\Models\AuditLog;
@@ -40,6 +41,7 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -54,6 +56,8 @@ class ModulePage extends Component
     use WithPagination;
 
     private const CUSTOMER_TIMEZONE = 'Asia/Manila';
+
+    private const MINIMUM_AI_MATCH_CONFIDENCE = 0.55;
 
     public string $moduleSlug = 'overview';
 
@@ -97,6 +101,38 @@ class ModulePage extends Component
     public int $bookingStep = 1;
 
     public string $manualServiceMode = '';
+
+    public bool $showAiBookingFlow = false;
+
+    /** @var array<int, TemporaryUploadedFile> */
+    public array $aiItemImages = [];
+
+    #[Locked]
+    public ?int $aiRetakeImageIndex = null;
+
+    #[Locked]
+    public string $aiAnalysisStatus = 'upload';
+
+    #[Locked]
+    public bool $aiAnalysisConfirmed = false;
+
+    #[Locked]
+    public string $aiDetectedItemName = '';
+
+    #[Locked]
+    public string $aiSuggestedServiceCode = '';
+
+    #[Locked]
+    public string $aiSuggestedServiceCategory = '';
+
+    #[Locked]
+    public float $aiConfidence = 0;
+
+    #[Locked]
+    public string $aiExplanation = '';
+
+    #[Locked]
+    public string $aiAnalysisModel = '';
 
     public string $walkInServiceType = '';
 
@@ -339,6 +375,7 @@ class ModulePage extends Component
     public function openBookingFlow(string $flow): void
     {
         $this->authorizeCustomer();
+        $this->resetAiBookingState();
         $this->bookingFlow = $this->validateValue($flow, ['quick', 'manual']);
         $this->bookingType = $this->bookingFlow === 'quick' ? 'quick' : 'scheduled';
         $this->bookingStep = 1;
@@ -360,6 +397,177 @@ class ModulePage extends Component
         $this->addressSuggestions = [];
         $this->showBookingFlow = true;
         $this->resetValidation();
+    }
+
+    public function openAiBookingFlow(): void
+    {
+        $this->authorizeCustomer();
+        $this->resetAiBookingState();
+        $this->selectedTechnicianId = null;
+        $this->showAiBookingFlow = true;
+        $this->resetValidation();
+    }
+
+    public function updatedAiItemImages(): void
+    {
+        if ($this->aiRetakeImageIndex !== null && count($this->aiItemImages) === 3) {
+            $replacementImage = array_pop($this->aiItemImages);
+            array_splice($this->aiItemImages, $this->aiRetakeImageIndex, 0, [$replacementImage]);
+            $this->aiItemImages = array_values($this->aiItemImages);
+            $this->aiRetakeImageIndex = null;
+        }
+
+        $this->resetAiAnalysisResult();
+        $this->resetValidation(['aiItemImages', 'aiItemImages.*']);
+    }
+
+    public function analyzeAiItemImage(AnalyzeServiceItemImage $analyzer): void
+    {
+        $this->authorizeCustomer();
+        Validator::make(['aiItemImages' => $this->aiItemImages], [
+            'aiItemImages' => ['required', 'array', 'size:3'],
+            'aiItemImages.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'aiItemImages.required' => 'Take or upload exactly three clear photos of the item.',
+            'aiItemImages.size' => 'Complete all three item photos before analysis.',
+            'aiItemImages.*.image' => 'Choose valid JPG, PNG, or WEBP images.',
+            'aiItemImages.*.mimes' => 'Choose valid JPG, PNG, or WEBP images.',
+            'aiItemImages.*.max' => 'Each image must not be larger than 5 MB.',
+        ])->validate();
+
+        try {
+            $analysis = $analyzer->analyze($this->aiItemImages, $this->serviceCatalog());
+        } catch (Throwable $exception) {
+            Log::warning('AI assisted booking image analysis failed.', [
+                'user_id' => auth()->id(),
+                'exception' => $exception::class,
+            ]);
+            $this->aiAnalysisStatus = 'error';
+            $this->addError('aiItemImages', 'We could not analyze these images right now. Try again or choose the service manually.');
+
+            return;
+        }
+
+        $this->aiDetectedItemName = $analysis['detected_item_name'];
+        $this->aiSuggestedServiceCode = $analysis['service_code'];
+        $this->aiSuggestedServiceCategory = $analysis['service_category'];
+        $this->aiConfidence = $analysis['confidence'];
+        $this->aiExplanation = $analysis['explanation'];
+        $this->aiAnalysisModel = $analysis['model'];
+
+        if (! $analysis['supported'] || $analysis['confidence'] < self::MINIMUM_AI_MATCH_CONFIDENCE) {
+            $this->aiAnalysisStatus = 'unsupported';
+
+            return;
+        }
+
+        $this->aiAnalysisStatus = 'result';
+        $this->resetValidation(['aiItemImages', 'aiItemImages.*']);
+    }
+
+    public function resetAiItemAnalysis(): void
+    {
+        $this->authorizeCustomer();
+        $this->aiItemImages = [];
+        $this->aiRetakeImageIndex = null;
+        $this->resetAiAnalysisResult();
+        $this->resetValidation(['aiItemImages', 'aiItemImages.*']);
+    }
+
+    public function removeAiItemImage(int $index): void
+    {
+        $this->authorizeCustomer();
+        abort_unless(array_key_exists($index, $this->aiItemImages), 404);
+
+        unset($this->aiItemImages[$index]);
+        $this->aiItemImages = array_values($this->aiItemImages);
+        $this->aiRetakeImageIndex = null;
+        $this->resetAiAnalysisResult();
+        $this->resetValidation(['aiItemImages', 'aiItemImages.*']);
+    }
+
+    public function retakeAiItemImage(int $index): void
+    {
+        $this->removeAiItemImage($index);
+        $this->aiRetakeImageIndex = $index;
+
+        $this->dispatch('ai-item-camera-start');
+    }
+
+    public function retakeAllAiItemImages(): void
+    {
+        $this->resetAiItemAnalysis();
+
+        $this->dispatch('ai-item-camera-start');
+    }
+
+    public function chooseAiManualBooking(): void
+    {
+        $this->authorizeCustomer();
+        $this->dispatch('ai-item-camera-stop');
+        $this->showAiBookingFlow = false;
+        $this->openBookingFlow('manual');
+    }
+
+    public function continueWithAiAnalysis(): void
+    {
+        $this->authorizeCustomer();
+        abort_unless($this->aiAnalysisStatus === 'result', 422, 'Analyze and confirm an item first.');
+        abort_unless($this->hasAiItemImages(), 422, 'Choose at least one item image first.');
+
+        $service = $this->serviceCatalog()->firstWhere('code', $this->aiSuggestedServiceCode);
+        abort_unless(
+            $service instanceof ServiceCatalog
+                && (string) $service->category === $this->aiSuggestedServiceCategory
+                && $this->aiConfidence >= self::MINIMUM_AI_MATCH_CONFIDENCE,
+            422,
+            'The suggested service is no longer available. Choose a service manually.',
+        );
+
+        $this->openAiPrefilledManualBooking($service, true);
+    }
+
+    public function continueWithPossibleAiMatch(): void
+    {
+        $this->authorizeCustomer();
+        abort_unless($this->aiAnalysisStatus === 'unsupported', 422, 'Analyze the item first.');
+        abort_unless($this->hasAiItemImages(), 422, 'Complete all three item photos first.');
+
+        $service = $this->serviceCatalog()->firstWhere('code', $this->aiSuggestedServiceCode);
+        abort_unless(
+            $this->aiDetectedItemName !== ''
+                && $service instanceof ServiceCatalog
+                && (string) $service->category === $this->aiSuggestedServiceCategory,
+            422,
+            'No available service could be suggested. Choose a service manually.',
+        );
+
+        $this->openAiPrefilledManualBooking($service, false);
+    }
+
+    private function openAiPrefilledManualBooking(ServiceCatalog $service, bool $confirmAnalysis): void
+    {
+        $this->dispatch('ai-item-camera-stop');
+        $this->showAiBookingFlow = false;
+        $this->showBookingFlow = true;
+        $this->bookingFlow = 'manual';
+        $this->bookingType = 'scheduled';
+        $this->manualServiceMode = 'home-service';
+        $this->bookingStep = 2;
+        $this->selectedTechnicianId = null;
+        $this->serviceCategory = (string) $service->category;
+        $this->serviceType = (string) $service->code;
+        $this->description = '';
+        $this->aiAnalysisConfirmed = $confirmAnalysis;
+        $this->resetValidation();
+    }
+
+    public function closeAiBookingFlow(): void
+    {
+        $this->authorizeCustomer();
+        $this->dispatch('ai-item-camera-stop');
+        $this->resetAiBookingState();
+        $this->resetValidation(['aiItemImages', 'aiItemImages.*']);
     }
 
     public function openWalkInBookingFlow(): void
@@ -505,6 +713,7 @@ class ModulePage extends Component
         $this->selectedWalkInShopId = null;
         $this->latestWalkInEntryId = null;
         $this->addressSuggestions = [];
+        $this->resetAiBookingState();
         $this->resetValidation();
     }
 
@@ -1110,8 +1319,28 @@ class ModulePage extends Component
             );
         }
 
+        $confirmedAiAnalysis = $this->confirmedAiAnalysis();
+        $storedAiImages = [];
+
+        if ($confirmedAiAnalysis !== null) {
+            Validator::make(['aiItemImages' => $this->aiItemImages], [
+                'aiItemImages' => ['required', 'array', 'size:3'],
+                'aiItemImages.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            ])->validate();
+
+            foreach ($this->aiItemImages as $aiItemImage) {
+                $imagePath = $aiItemImage->store('booking-item-images/'.auth()->id(), 'local');
+                abort_if(! is_string($imagePath) || $imagePath === '', 500, 'An item image could not be saved.');
+                $storedAiImages[] = [
+                    'path' => $imagePath,
+                    'original_name' => Str::limit($aiItemImage->getClientOriginalName(), 255, ''),
+                    'mime_type' => (string) ($aiItemImage->getMimeType() ?: 'image/jpeg'),
+                ];
+            }
+        }
+
         try {
-            $bookingId = DB::transaction(function () use ($validated, $selectedTechnicianId, $bookingIdempotencyKey): int {
+            $bookingId = DB::transaction(function () use ($validated, $selectedTechnicianId, $bookingIdempotencyKey, $confirmedAiAnalysis, $storedAiImages): int {
                 $customer = User::query()->lockForUpdate()->findOrFail(auth()->id());
                 $existingBooking = $customer->bookings()->where('idempotency_key', $bookingIdempotencyKey)->first();
 
@@ -1163,6 +1392,23 @@ class ModulePage extends Component
                     'service_type' => $validated['service_type'],
                 ]);
 
+                if ($confirmedAiAnalysis !== null && $storedAiImages !== []) {
+                    $primaryImage = $storedAiImages[0];
+                    $booking->itemAnalysis()->create([
+                        'image_path' => $primaryImage['path'],
+                        'image_original_name' => $primaryImage['original_name'],
+                        'image_mime_type' => $primaryImage['mime_type'],
+                        'images' => $storedAiImages,
+                        'detected_item_name' => $confirmedAiAnalysis['detected_item_name'],
+                        'suggested_service_code' => $confirmedAiAnalysis['service_code'],
+                        'suggested_service_category' => $confirmedAiAnalysis['service_category'],
+                        'confidence' => $confirmedAiAnalysis['confidence'],
+                        'explanation' => $confirmedAiAnalysis['explanation'],
+                        'model' => $confirmedAiAnalysis['model'],
+                        'confirmed_at' => now(),
+                    ]);
+                }
+
                 $this->recordAudit('customer.booking_created', 'booking', $booking->id, [
                     'booking_type' => $validated['booking_type'],
                     'service_type' => $validated['service_type'],
@@ -1172,6 +1418,10 @@ class ModulePage extends Component
                 return $booking->id;
             });
         } catch (UniqueConstraintViolationException $exception) {
+            if ($storedAiImages !== []) {
+                Storage::disk('local')->delete(collect($storedAiImages)->pluck('path')->all());
+            }
+
             $existingBooking = $this->customerBookingsQuery()
                 ->where('idempotency_key', $bookingIdempotencyKey)
                 ->first();
@@ -1182,6 +1432,12 @@ class ModulePage extends Component
                 report($exception);
                 abort(409, 'This booking request key has already been used. Please retry the booking.');
             }
+        } catch (Throwable $exception) {
+            if ($storedAiImages !== []) {
+                Storage::disk('local')->delete(collect($storedAiImages)->pluck('path')->all());
+            }
+
+            throw $exception;
         }
 
         $this->resetBookingForm($validated['customer_phone']);
@@ -2051,7 +2307,7 @@ class ModulePage extends Component
             return null;
         }
 
-        $query = $this->customerBookingsQuery();
+        $query = $this->customerBookingsQuery()->with('itemAnalysis');
 
         if ($this->tableExists('quotations')) {
             $query->with('quotation');
@@ -2555,7 +2811,64 @@ class ModulePage extends Component
         $this->selectedWalkInShopId = null;
         $this->latestWalkInEntryId = null;
         $this->bookingIdempotencyKey = Str::uuid()->toString();
+        $this->resetAiBookingState();
         $this->resetValidation();
+    }
+
+    private function resetAiBookingState(): void
+    {
+        $this->showAiBookingFlow = false;
+        $this->aiItemImages = [];
+        $this->aiRetakeImageIndex = null;
+        $this->resetAiAnalysisResult();
+    }
+
+    private function resetAiAnalysisResult(): void
+    {
+        $this->aiAnalysisStatus = 'upload';
+        $this->aiAnalysisConfirmed = false;
+        $this->aiDetectedItemName = '';
+        $this->aiSuggestedServiceCode = '';
+        $this->aiSuggestedServiceCategory = '';
+        $this->aiConfidence = 0;
+        $this->aiExplanation = '';
+        $this->aiAnalysisModel = '';
+    }
+
+    /**
+     * @return array{detected_item_name: string, service_code: string, service_category: string, confidence: float, explanation: string, model: string}|null
+     */
+    private function confirmedAiAnalysis(): ?array
+    {
+        if (! $this->aiAnalysisConfirmed || ! $this->hasAiItemImages()) {
+            return null;
+        }
+
+        $service = $this->serviceCatalog()->firstWhere('code', $this->aiSuggestedServiceCode);
+
+        if (! $service instanceof ServiceCatalog
+            || (string) $service->category !== $this->aiSuggestedServiceCategory
+            || $this->aiConfidence < self::MINIMUM_AI_MATCH_CONFIDENCE) {
+            return null;
+        }
+
+        return [
+            'detected_item_name' => $this->aiDetectedItemName,
+            'service_code' => $this->aiSuggestedServiceCode,
+            'service_category' => $this->aiSuggestedServiceCategory,
+            'confidence' => $this->aiConfidence,
+            'explanation' => $this->aiExplanation,
+            'model' => $this->aiAnalysisModel,
+        ];
+    }
+
+    private function hasAiItemImages(): bool
+    {
+        return $this->aiItemImages !== []
+            && count($this->aiItemImages) === 3
+            && collect($this->aiItemImages)->every(
+                static fn (mixed $image): bool => $image instanceof TemporaryUploadedFile,
+            );
     }
 
     private function idempotencyKey(string $key): string

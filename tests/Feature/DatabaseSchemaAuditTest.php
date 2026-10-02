@@ -17,6 +17,7 @@ test('runtime schema contains the tables and columns used by core workflows', fu
             'id', 'booking_id', 'idempotency_key', 'from_status', 'to_status', 'actor_id', 'reason',
             'metadata', 'created_at',
         ],
+        'booking_item_analyses' => ['id', 'booking_id', 'image_path', 'image_original_name', 'image_mime_type', 'images', 'detected_item_name', 'suggested_service_code', 'suggested_service_category', 'confidence', 'explanation', 'model', 'confirmed_at', 'created_at', 'updated_at'],
         'technician_request_declines' => ['id', 'technician_id', 'booking_id', 'created_at', 'updated_at'],
         'payments' => ['id', 'booking_id', 'amount', 'status', 'method', 'transaction_ref', 'paid_at', 'created_at', 'updated_at'],
         'reviews' => ['id', 'booking_id', 'customer_id', 'technician_id', 'rating', 'comment', 'status', 'created_at', 'updated_at'],
@@ -54,6 +55,7 @@ test('runtime schema keeps core uniqueness and foreign-key constraints', functio
     expect($indexes('bookings'))
         ->toContain('bookings_reference_unique', 'bookings_idempotency_key_unique');
     expect($indexes('booking_status_histories'))->toContain('booking_status_histories_idempotency_key_unique');
+    expect($indexes('booking_item_analyses'))->toContain('booking_item_analyses_booking_id_unique');
     expect($indexes('payments'))->toContain('payments_transaction_ref_unique', 'payments_booking_id_unique');
     expect($indexes('reviews'))->toContain('reviews_booking_id_unique');
     expect($indexes('technician_request_declines'))->toContain('technician_request_declines_technician_id_booking_id_unique');
@@ -62,6 +64,7 @@ test('runtime schema keeps core uniqueness and foreign-key constraints', functio
         ->toContain('user_id->users.id', 'assigned_technician_id->users.id');
     expect($foreignKeys('booking_status_histories'))
         ->toContain('booking_id->bookings.id', 'actor_id->users.id');
+    expect($foreignKeys('booking_item_analyses'))->toContain('booking_id->bookings.id');
     expect($foreignKeys('walk_in_status_histories'))
         ->toContain('walk_in_entry_id->walk_in_entries.id', 'actor_id->users.id');
     expect($foreignKeys('technician_request_declines'))

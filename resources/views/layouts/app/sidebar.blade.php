@@ -3,7 +3,7 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen {{ auth()->user()->canAccessOperationsWorkspace() ? 'bg-gray-50 dark:bg-zinc-950' : 'bg-zinc-50 dark:bg-zinc-800' }}" @if (auth()->user()->canAccessOperationsWorkspace()) data-admin-workspace @endif>
+    <body class="min-h-screen overflow-x-clip {{ auth()->user()->canAccessOperationsWorkspace() ? 'bg-gray-50 dark:bg-zinc-950' : 'bg-zinc-50 dark:bg-zinc-800' }}" @if (auth()->user()->canAccessOperationsWorkspace()) data-admin-workspace @endif>
         @if (auth()->user()->isCustomer())
             <flux:sidebar sticky :collapsible="true" data-app-desktop-sidebar class="max-lg:hidden !w-64 border-e border-gray-200 bg-white p-0">
                 <x-customer-desktop-sidebar />
@@ -68,7 +68,7 @@
 
         @if (! auth()->user()->isCustomer() && ! auth()->user()->isTechnician())
             <!-- Mobile User Menu -->
-            <flux:header class="lg:hidden border-b border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+            <flux:header class="sticky top-0 z-30 min-h-16 border-b border-zinc-200 bg-white/95 px-3 backdrop-blur lg:hidden dark:border-zinc-700 dark:bg-zinc-900/95" data-app-mobile-header>
                 <x-app-logo href="{{ route('dashboard') }}" wire:navigate />
 
                 <flux:spacer />

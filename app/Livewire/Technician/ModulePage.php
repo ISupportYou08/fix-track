@@ -1174,7 +1174,7 @@ class ModulePage extends Component
     /** @return Builder<Booking> */
     private function availableRequestsQuery(): Builder
     {
-        $query = Booking::query()->with(['customer:id,name,avatar_path', 'service:code,name'])->whereNull('assigned_technician_id')->whereIn('status', ['pending', 'matching']);
+        $query = Booking::query()->with(['customer:id,name,avatar_path', 'service:code,name', 'itemAnalysis'])->whereNull('assigned_technician_id')->whereIn('status', ['pending', 'matching']);
         $serviceCategories = $this->approvedServiceCategories();
 
         if ($serviceCategories === []) {
