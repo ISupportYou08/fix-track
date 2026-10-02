@@ -54,6 +54,25 @@ test('the authorized Vercel migration endpoint runs pending migrations', functio
         ]);
 });
 
+test('the authorized Vercel migration endpoint reports migration failures without exposing details', function () {
+    config()->set('services.vercel.cron_secret', 'test-cron-secret');
+    Artisan::shouldReceive('call')
+        ->once()
+        ->with('migrate', [
+            '--force' => true,
+            '--no-interaction' => true,
+        ])
+        ->andThrow(new RuntimeException('Sensitive database connection details.'));
+
+    $this->withHeader('Authorization', 'Bearer test-cron-secret')
+        ->getJson(route('internal.cron.migrate-database'))
+        ->assertServerError()
+        ->assertExactJson([
+            'ok' => false,
+            'message' => 'Database migrations failed.',
+        ]);
+});
+
 test('the Vercel deployment configuration uses PHP 8.4 and routes through Laravel', function () {
     $configuration = json_decode(
         file_get_contents(base_path('vercel.json')),
@@ -67,6 +86,8 @@ test('the Vercel deployment configuration uses PHP 8.4 and routes through Larave
         ->and($configuration['buildCommand'])->toBe('node prepare-vercel-assets.mjs')
         ->and($configuration['outputDirectory'])->toBe('dist')
         ->and($configuration['functions']['api/index.php']['runtime'])->toBe('vercel-php@0.8.0')
+        ->and($configuration['functions']['api/index.php']['maxDuration'])->toBe(300)
+        ->and($configuration['functions']['api/index.php'])->not->toHaveKey('memory')
         ->and(collect($configuration['routes'])->last()['dest'])->toBe('/api/index.php')
         ->and($configuration['crons'][0]['path'])->toBe('/internal/cron/expire-walk-ins')
         ->and($configuration['crons'])->toHaveCount(1);

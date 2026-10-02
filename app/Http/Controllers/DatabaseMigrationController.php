@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Throwable;
 
 class DatabaseMigrationController extends Controller
 {
@@ -18,10 +19,19 @@ class DatabaseMigrationController extends Controller
             401,
         );
 
-        $exitCode = Artisan::call('migrate', [
-            '--force' => true,
-            '--no-interaction' => true,
-        ]);
+        try {
+            $exitCode = Artisan::call('migrate', [
+                '--force' => true,
+                '--no-interaction' => true,
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Database migrations failed.',
+            ], 500);
+        }
 
         return response()->json([
             'ok' => $exitCode === 0,

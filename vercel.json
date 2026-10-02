@@ -6,8 +6,7 @@
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0",
-      "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "routes": [
@@ -23,10 +22,6 @@
     {
       "path": "/internal/cron/expire-walk-ins",
       "schedule": "5 16 * * *"
-    },
-    {
-      "path": "/internal/cron/migrate-database",
-      "schedule": "38 8 * * *"
     }
   ]
 }

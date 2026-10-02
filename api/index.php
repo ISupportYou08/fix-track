@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+set_time_limit(240);
+
 $runtimeRoot = '/tmp/fixtrack';
 $runtimeDirectories = [
     $runtimeRoot.'/cache',
