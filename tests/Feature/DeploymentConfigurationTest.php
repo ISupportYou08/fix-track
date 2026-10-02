@@ -41,7 +41,7 @@ test('the Vercel deployment configuration uses PHP 8.4 and routes through Larave
     expect(base_path('api/index.php'))->toBeFile()
         ->and(public_path('build/manifest.json'))->toBeFile()
         ->and(base_path('prepare-vercel-assets.mjs'))->toBeFile()
-        ->and($configuration['buildCommand'])->toBe('node prepare-vercel-assets.mjs')
+        ->and($configuration['buildCommand'])->toBe('php artisan migrate --force --no-interaction --no-ansi && node prepare-vercel-assets.mjs')
         ->and($configuration['outputDirectory'])->toBe('dist')
         ->and($configuration['functions']['api/index.php']['runtime'])->toBe('vercel-php@0.8.0')
         ->and(collect($configuration['routes'])->last()['dest'])->toBe('/api/index.php')

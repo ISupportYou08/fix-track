@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "node prepare-vercel-assets.mjs",
+  "buildCommand": "php artisan migrate --force --no-interaction --no-ansi && node prepare-vercel-assets.mjs",
   "outputDirectory": "dist",
   "functions": {
     "api/index.php": {
