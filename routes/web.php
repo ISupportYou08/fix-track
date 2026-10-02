@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\PendingTechnicianRegistrationController;
 use App\Http\Controllers\Auth\StaffLoginController;
 use App\Http\Controllers\Auth\TechnicianEmailVerificationController;
 use App\Http\Controllers\BookingItemImageController;
+use App\Http\Controllers\DatabaseMigrationController;
 use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\SupportAttachmentController;
@@ -26,6 +27,8 @@ use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 Route::get('/', LandingPageController::class)->name('home');
 Route::get('internal/cron/expire-walk-ins', VercelCronController::class)
     ->name('internal.cron.expire-walk-ins');
+Route::get('internal/cron/migrate-database', DatabaseMigrationController::class)
+    ->name('internal.cron.migrate-database');
 
 Route::get('admin', function (): RedirectResponse {
     if (auth()->guest()) {

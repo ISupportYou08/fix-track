@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\WalkInEntry;
+use Illuminate\Support\Facades\Artisan;
 
 test('the Vercel cron endpoint requires its configured bearer secret', function () {
     config()->set('services.vercel.cron_secret', 'test-cron-secret');
@@ -31,6 +32,28 @@ test('the authorized Vercel cron expires stale Walk-In tickets', function () {
     expect($ticket->refresh()->status)->toBe('no_show');
 });
 
+test('the authorized Vercel migration endpoint runs pending migrations', function () {
+    config()->set('services.vercel.cron_secret', 'test-cron-secret');
+    Artisan::shouldReceive('call')
+        ->once()
+        ->with('migrate', [
+            '--force' => true,
+            '--no-interaction' => true,
+        ])
+        ->andReturn(0);
+
+    $this->getJson(route('internal.cron.migrate-database'))
+        ->assertUnauthorized();
+
+    $this->withHeader('Authorization', 'Bearer test-cron-secret')
+        ->getJson(route('internal.cron.migrate-database'))
+        ->assertOk()
+        ->assertJson([
+            'ok' => true,
+            'message' => 'Database migrations completed.',
+        ]);
+});
+
 test('the Vercel deployment configuration uses PHP 8.4 and routes through Laravel', function () {
     $configuration = json_decode(
         file_get_contents(base_path('vercel.json')),
@@ -41,9 +64,11 @@ test('the Vercel deployment configuration uses PHP 8.4 and routes through Larave
     expect(base_path('api/index.php'))->toBeFile()
         ->and(public_path('build/manifest.json'))->toBeFile()
         ->and(base_path('prepare-vercel-assets.mjs'))->toBeFile()
-        ->and($configuration['buildCommand'])->toBe('php artisan migrate --force --no-interaction --no-ansi && node prepare-vercel-assets.mjs')
+        ->and($configuration['buildCommand'])->toBe('node prepare-vercel-assets.mjs')
         ->and($configuration['outputDirectory'])->toBe('dist')
         ->and($configuration['functions']['api/index.php']['runtime'])->toBe('vercel-php@0.8.0')
         ->and(collect($configuration['routes'])->last()['dest'])->toBe('/api/index.php')
-        ->and($configuration['crons'][0]['path'])->toBe('/internal/cron/expire-walk-ins');
+        ->and($configuration['crons'][0]['path'])->toBe('/internal/cron/expire-walk-ins')
+        ->and($configuration['crons'][1]['path'])->toBe('/internal/cron/migrate-database')
+        ->and($configuration['crons'][1]['schedule'])->toBe('55 7 * * *');
 });
