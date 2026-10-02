@@ -35,7 +35,10 @@ test('operations portal roots reject an authenticated account from another role'
 
     $this->actingAs($user)
         ->get(route($portalRoute))
-        ->assertForbidden();
+        ->assertForbidden()
+        ->assertSee('Access restricted')
+        ->assertSee('Go to my dashboard')
+        ->assertSee('Sign in with another account');
 })->with([
     ['customer', 'staff.index'],
     ['technician', 'staff.index'],
@@ -69,6 +72,22 @@ test('staff and administrator login screens are separate from public sign in', f
         ->assertDontSee('Staff Sign In')
         ->assertDontSee('Admin Sign In');
 });
+
+test('operations login failures display a translated credential message', function (string $portalRoute) {
+    $response = $this->post(route($portalRoute), [
+        'email' => 'unknown@fixtrack.test',
+        'password' => 'incorrect-password',
+    ]);
+
+    $response->assertSessionHasErrors([
+        'email' => __('auth.failed'),
+    ]);
+
+    expect(__('auth.failed'))->toBe('These credentials do not match our records.');
+})->with([
+    'staff.login.store',
+    'admin.login.store',
+]);
 
 test('staff can authenticate only through the staff portal', function () {
     $staff = User::factory()->create([
